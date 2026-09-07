@@ -1,0 +1,69 @@
+# CI for @valiify/val-core — VERIFIES, NEVER PUBLISHES.
+#
+# Publishing is done locally (npm requires interactive 2FA for this account);
+# see README "Releasing". On a v* tag this workflow additionally asserts the
+# tag matches package.json, so a mis-tagged release fails loudly.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same pin as the consumer libraries' CI. Bump deliberately, not by
+      # inheriting whatever the runner ships.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+          cache: npm
+
+      - run: npm ci
+
+      - name: test (grid-diff fixtures)
+        run: npm test
+
+      # Renders every template against val.config.example.json in dry-run
+      # mode: fails on an unknown {{PLACEHOLDER}}, writes nothing.
+      - name: check (templates render against example config)
+        run: npm run check
+
+      # Packaging guard. Catches the class of regression where npm silently
+      # "corrects" package.json at publish time (bin path, repository url —
+      # the 0.1.0 → 0.1.1 lesson) and where a file lands in, or falls out
+      # of, the tarball.
+      - name: pack
+        run: |
+          set -euo pipefail
+          npm pack --dry-run --json > pack.json
+          node -e '
+            const [p] = JSON.parse(require("fs").readFileSync("pack.json", "utf8"));
+            const paths = p.files.map(f => f.path);
+            const must = ["bin/val-init.mjs", "package.json", "schema/val.config.schema.json", "val.config.example.json"];
+            const missing = must.filter(f => !paths.includes(f));
+            if (missing.length) { console.error("missing from tarball:", missing); process.exit(1); }
+            const leaked = paths.filter(f => /^(\.github\/|CHANGELOG|\.claude\/)/.test(f));
+            if (leaked.length) { console.error("should not be in tarball:", leaked); process.exit(1); }
+            console.log(`tarball ok: ${paths.length} files`);
+          '
+          if npm pack --dry-run 2>&1 >/dev/null | grep -i "npm warn"; then
+            echo "npm pack emitted a warning — run \`npm pkg fix\` and inspect the diff."
+            exit 1
+          fi
+
+      - name: tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json $PKG — bump the version before tagging."
+            exit 1
+          fi

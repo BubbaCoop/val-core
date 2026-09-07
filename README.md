@@ -156,7 +156,35 @@ extraction or verification:
 - **minor** — new templates, tools, skills, or optional config keys
 - **patch** — template wording, tool fixes, docs
 
-Run `npx val-init` after upgrading; `--check` in CI flags drift.
+Run `npx val-init` after upgrading; `--check` in CI flags drift. Note that
+even a docs-only patch changes the version stamped into every generated
+file's header, so every release forces consumers to regenerate. Changes
+that do not touch the published tarball (CI, CHANGELOG, this README) are
+committed, not released.
+
+## Releasing
+
+Publishing is local — npm requires interactive 2FA for this account. CI
+(`.github/workflows/ci.yml`) verifies; it never publishes.
+
+```sh
+# on a green main with a clean tree
+#   move CHANGELOG "[Unreleased]" -> "[x.y.z] — YYYY-MM-DD", then:
+git commit -am "Changelog x.y.z"
+npm test && npm run check && npm pack --dry-run   # what CI runs; no "npm warn" lines
+npm version patch|minor|major                     # bumps, commits, tags vx.y.z
+npm publish                                       # browser 2FA prompt
+git push origin main --follow-tags                # CI re-verifies; tag must match version
+```
+
+Then finish the release in each consumer library, or its `val:check` CI
+gate goes red on the header change:
+
+```sh
+npm install --save-dev @valiify/val-core@x.y.z
+npx val-init          # regenerates .claude/agents + .claude/commands
+git add .claude/ val/tools package.json package-lock.json
+```
 
 ## License
 
