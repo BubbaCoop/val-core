@@ -4,7 +4,7 @@
   "description": "Val — the shared agent pipeline for Valiify component libraries: Figma extraction, component mapping, build, QA and visual accuracy. Templates + tools + methodology; each library supplies a val/config.json.",
   "type": "module",
   "bin": {
-    "val-init": "./bin/val-init.mjs"
+    "val-init": "bin/val-init.mjs"
   },
   "scripts": {
     "test": "node --test tools/grid-diff.test.mjs",
@@ -30,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BubbaCoop/val-core.git"
+    "url": "git+https://github.com/BubbaCoop/val-core.git"
   },
   "engines": {
     "node": ">=20"
