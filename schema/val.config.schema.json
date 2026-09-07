@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/BubbaCoop/val-core/schema/val.config.schema.json",
+  "title": "Val library configuration (val/config.json)",
+  "description": "Everything that differs between Valiify component libraries. val-init substitutes these values into the shared agent templates. Anything NOT in here is shared methodology and belongs in the templates or the core skills.",
+  "type": "object",
+  "required": ["library", "paths"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "library": {
+      "type": "object",
+      "required": ["name", "displayName", "figmaFileKey"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Machine name — used in run ids and generated headers.",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "examples": ["shortapp", "dashboard"]
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human name used in agent prose ('the Short App type system…').",
+          "examples": ["Short App", "Dashboard"]
+        },
+        "figmaFileKey": {
+          "type": "string",
+          "description": "The 22-char key from the Figma file URL.",
+          "pattern": "^[A-Za-z0-9]{22}$"
+        },
+        "figmaFileName": {
+          "type": "string",
+          "description": "Optional — the Figma file's title, for prose only."
+        }
+      }
+    },
+
+    "paths": {
+      "type": "object",
+      "required": ["designSystemSkill"],
+      "additionalProperties": false,
+      "description": "All repo-relative. Defaults match the Valiify library layout; override only where a repo differs.",
+      "properties": {
+        "designSystemSkill": {
+          "type": "string",
+          "description": "The library-specific design-language skill (components, tokens, casing rules). Stays in the library repo — never in val-core.",
+          "examples": [".claude/skills/valiify-shortapp-ui/SKILL.md"]
+        },
+        "componentRegistry": { "type": "string", "default": "val/registry/components.json" },
+        "tokenSource": { "type": "string", "default": "src/themes/valiify.css", "description": "Generated theme CSS the build agent reads token names from." },
+        "componentCss": { "type": "string", "default": "dist/index.css", "description": "The built library the val page consumes." },
+        "iconSprite": { "type": "string", "default": "src/icons/sprite.svg" },
+        "storiesDir": { "type": "string", "default": "stories/components", "description": "Storybook stories the registry generator scans; also the staleness reference for the registry." },
+        "componentsDir": { "type": "string", "default": "src/components" },
+        "runOutputDir": { "type": "string", "default": "val/runs" },
+        "toolsDir": { "type": "string", "default": "val/tools", "description": "Where val-init symlinks the core tools." },
+        "figmaTokensJson": { "type": "string", "default": "tokens/figma-tokens.json", "description": "Extract pipeline: the token source-of-truth new variables are added to." },
+        "buildThemeScript": { "type": "string", "default": "scripts/build-theme.mjs" },
+        "visualSpecsScript": { "type": "string", "default": "scripts/visual-specs.mjs" },
+        "componentProcessDoc": { "type": "string", "default": "docs/component-process.md" },
+        "claudeMdSections": {
+          "type": "string",
+          "default": "Design Tokens + Quick Reference",
+          "description": "Which CLAUDE.md sections the build agent must read fresh."
+        }
+      }
+    },
+
+    "typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The one area where the libraries' design systems genuinely diverge in agent behaviour.",
+      "properties": {
+        "fonts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["@fontsource/inter"],
+          "description": "Font packages the built page imports.",
+          "examples": [["@fontsource/inter"], ["@fontsource/inter", "@fontsource/jetbrains-mono"]]
+        },
+        "systemNote": {
+          "type": "string",
+          "description": "One sentence appended after the font list in the build agent — the type-system constraint it must respect.",
+          "examples": [
+            "the Short App type system is INTER-ONLY (all 24 text styles; there is no mono register in this design system)",
+            "Inter for UI, JetBrains Mono strictly for verifiable data"
+          ]
+        },
+        "dataRule": {
+          "type": "string",
+          "description": "How verifiable data (IDs, amounts, percentages) is set. Substituted verbatim into val-build rule 4 and val-context §4.",
+          "examples": [
+            "tabular-nums (the system is Inter-only; no mono register exists)",
+            "JetBrains Mono + tabular-nums"
+          ]
+        }
+      }
+    },
+
+    "audience": {
+      "type": "string",
+      "description": "Sentence for val-context §1 describing which audiences/registers this library serves and how that selects component families.",
+      "examples": [
+        "applicant-facing (the Short App application flow — fields, cards, actions) or portal/reviewer-facing (the Portal Specific set: StatusTracker, Action, UtilityButton). This selects which component families apply.",
+        "reviewer-facing or applicant-facing (this selects the design language register)."
+      ]
+    },
+
+    "pipelines": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which pipelines to generate. Both default to true.",
+      "properties": {
+        "val": { "type": "boolean", "default": true, "description": "Page assembly: /val + val-* agents." },
+        "extract": { "type": "boolean", "default": true, "description": "Component extraction: /extract + extract-* lanes." }
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/@valiify/val-core/schema/val.config.schema.json",
+  "library": {
+    "name": "shortapp",
+    "displayName": "Short App",
+    "figmaFileKey": "PA5pr1Q8KLfbjTxdAbFm0V",
+    "figmaFileName": "Updated-Short-App"
+  },
+  "paths": {
+    "designSystemSkill": ".claude/skills/valiify-shortapp-ui/SKILL.md",
+    "componentRegistry": "val/registry/components.json",
+    "tokenSource": "src/themes/valiify.css",
+    "componentCss": "dist/index.css",
+    "iconSprite": "src/icons/sprite.svg",
+    "storiesDir": "stories/components",
+    "componentsDir": "src/components",
+    "runOutputDir": "val/runs",
+    "toolsDir": "val/tools",
+    "figmaTokensJson": "tokens/figma-tokens.json",
+    "buildThemeScript": "scripts/build-theme.mjs",
+    "visualSpecsScript": "scripts/visual-specs.mjs",
+    "componentProcessDoc": "docs/component-process.md",
+    "claudeMdSections": "Design Tokens + Quick Reference"
+  },
+  "typography": {
+    "fonts": ["@fontsource/inter"],
+    "systemNote": "the Short App type system is INTER-ONLY (all 24 text styles; there is no mono register in this design system)",
+    "dataRule": "tabular-nums (the Short App system is Inter-only; no mono register exists — if the Figma appears to show a mono face, flag it as a design question rather than importing a font the token set doesn't define)"
+  },
+  "audience": "applicant-facing (the Short App application flow — fields, cards, actions) or portal/reviewer-facing (the Portal Specific set: StatusTracker, Action, UtilityButton). This selects which component families apply.",
+  "pipelines": {
+    "val": true,
+    "extract": true
+  }
+}
