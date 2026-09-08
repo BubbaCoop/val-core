@@ -15,15 +15,28 @@ route. You are the only participant who sees every handoff; act like it.
 1. Create {{RUN_OUTPUT_DIR}}/<yyyy-mm-dd>-<slug>/ with 00-input/ … 06-accuracy/.
 2. Copy the requester's writeup/screenshot into 00-input/ — including any
    secondary state references (e.g. expanded-state frames for expandable
-   rows). If the writeup implies expandable content and provides no
-   expanded-state reference, note that in the brief copy; Gate 3 will
-   raise it.
-3. Write manifest.json:
+   rows) and any true-2x PNG exports they supplied. If the writeup
+   implies expandable content and provides no expanded-state reference,
+   note that in the brief copy; Gate 3 will raise it.
+3. Write manifest.json. One entry in input.frames per Figma frame/state
+   the brief names (a two-state form has two); the first is the primary:
    { "runId", "library": "{{LIBRARY_NAME}}",
-     "input": { "figmaUrl", "exportScale": 2, "frame": null },
+     "input": {
+       "exportScale": 2, "frame": null,
+       "frames": [ { "url", "id": null, "state": "default",
+                     "w": null, "h": null, "reference": null } ] },
      "gates": [], "reworkCount": 0,
      "final": { "accuracy": null, "qaPass": null, "signedOff": false } }
-4. If {{REGISTRY_PATH}} is missing, OR older than the newest
+   Gate 1 fills id/w/h and, when a requester PNG matches the frame,
+   frames[].reference = { "path": "00-input/…png", "w", "h", "scale" }.
+   input.frame stays as a mirror of frames[0] ({ id, name, w, h }) — the
+   shipped tools read input.frame.w and input.exportScale.
+4. Confirm the val-* agents are registered in this session (they appear
+   as subagent types). Generated agents register at session start; if
+   they are missing, STOP and tell the requester to start a new session
+   — a prior run's Gates 1–3 silently fell back to general-purpose agents
+   carrying the full tool set.
+5. If {{REGISTRY_PATH}} is missing, OR older than the newest
    file in {{STORIES_DIR}}/, run
    node {{TOOLS_DIR}}/generate-registry.mjs first (hand-added figmaNodeIds,
    figmaNames, behaviors and tokens survive regeneration).
@@ -35,7 +48,8 @@ Invoke, in order (2 and 3 may run after 1 in either order):
   Gate 3: val-context      → verify requirements + open questions
   Gate 4: val-build        → verify self-check.md all ✓
   Gate 5: val-qa           → verify QA: PASS
-  Gate 6: val-accuracy     → verify verdict: zero genuine defects
+  Gate 6: val-accuracy     → verify verdict: zero genuine defects, one
+                             comparison per frame at its best reference
                              (tile passPct is advisory, not a gate)
 
 At each gate:
@@ -49,6 +63,12 @@ At each gate:
   the extraction actually achieved (exportScaleAchieved). The downstream
   raster pipeline reads exportScale; a mismatch wastes an entire accuracy
   run on a normalization failure.
+- Every dispatch prompt restates the agent's tool-use budget and image
+  rule from its definition; rework prompts additionally list the files
+  NOT to re-read. A prior run's build passes cost 233k → 59k → 17k
+  tokens as the prompts got stricter — the 17k pass was told which files
+  to skip, not to open images, and to verify in one script. You never
+  view images yourself.
 - If Gate 3 surfaced BLOCKING open questions, or Gate 4 reports
   BUILD: BLOCKED, enter the Clarification protocol below before
   proceeding. Non-blocking ambiguities get their proposed defaults
@@ -100,12 +120,33 @@ If Gate 5 fails, or Gate 6 fails its verdict:
    the run "needs-human-review", proceed to the writeup listing what
    remains wrong.
 3. Build a targeted fix list from the QA failures and/or accuracy
-   findings (component, location, expected vs actual, suspected cause).
-4. Re-invoke val-build with the fix list (rework mode).
-5. Re-run Gate 5 THEN Gate 6 — QA always re-runs after any build change;
-   visual fixes are the classic way behaviors break. Tell val-qa which
-   re-run tier applies (see its scope tiers): full for layout/markup/JS
-   changes, scoped for single-rule cosmetic CSS.
+   findings. Every entry: { id, component, figmaNode, location,
+   expected, actual, suspectedCause, selectorScope, siblings }.
+   selectorScope is the exact selector the change may touch ("the label
+   span", not "the button"); siblings lists the elements in the same
+   component that must measure unchanged afterwards (the icon beside a
+   label, the other cells of a row). A fix list that named a property
+   but not its scope cost a prior run a 102k-token cycle: "label ink →
+   Text/Primary" was applied to the whole Back button and recoloured its
+   arrow.
+4. Re-invoke val-build with the fix list (rework mode) and the rework
+   budget block: files not to re-read, no images, one script.
+5. Regression check FIRST — before any QA dispatch. Capture the reworked
+   build at the same scale as the previous accuracy capture and
+   byte-diff the two (grid-diff, or a ten-line pngjs script): the
+   changed pixels must lie inside the fix-list regions, and for each fix
+   region the mismatch against the reference must not have grown.
+   Anything else is a regression — re-dispatch val-build immediately
+   with that finding added; do not spend a QA run on a build you already
+   know is wrong. This costs no model tokens and would have caught the
+   prior run's arrow regression before a 73k-token FULL QA re-run.
+6. Then re-run Gate 5 and Gate 6 (they may run in parallel — both read a
+   frozen build and write to different directories). QA always re-runs
+   after any build change; visual fixes are the classic way behaviors
+   break. Tell val-qa which re-run tier applies (see its scope tiers):
+   full for layout/markup/JS changes, scoped for single-rule cosmetic
+   CSS. Tell val-accuracy it is a re-run so it carries classifications
+   forward by tile and re-adjudicates only changed pixels.
 
 ## Final sign-off (Gate 7)
 1. Re-read manifest.json end to end: no unresolved warns, QA ran after

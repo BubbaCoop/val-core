@@ -11,6 +11,47 @@ README "Releasing".
 
 ## [Unreleased]
 
+### Changed — templates and skills only (no tool, schema or bin changes)
+
+Efficiency pass driven by the audit of run `2026-09-07-bsa-account-information`
+(1.36M harness tokens / 540 model turns; weighted ~12.5M input-equivalent,
+two-thirds cache writes). Every change targets context size × turn count.
+
+- **Image discipline in every `val-*` agent and the orchestrator.**
+  `val-context` reads only the text files in `00-input/`; `val-build` never
+  opens the 2x references or its own renders (1x section crops only when a
+  gap requires seeing the design); `val-accuracy` views only native-scale
+  crops for findings it cannot classify numerically; `val-qa` and the
+  orchestrator never view images.
+- **"Write one script, run it once" with tool-use budgets** in `val-build`
+  (25 initial / 8 rework), `val-accuracy` (20 / 8) and `val-qa` (20 / 8),
+  with the same explicit-escape clause `extract-visual` already uses.
+- **`val-build` context**: `figma.json` is a lookup table (as in
+  `val-components`); the new `01-extraction/layout.json` is the geometry
+  source; only the sprite `<symbol>`s a page uses are inlined (the full
+  sprite produced a 536KB `index.html`). The geometry check writes
+  `04-build/regions.json`.
+- **Multi-state screens are first-class**: manifest `input.frames[]` (first
+  entry primary at `01-extraction/` root, others under
+  `01-extraction/frames/<state>/`), `frames[].reference` for requester 2x
+  exports, and the `window.valPage.{applyState,setValue,getState}` page
+  contract. Replaces the single `input.figmaUrl` / `input.frame`.
+- **Accuracy comparisons**: one per frame at its best reference (requester
+  2x export, else the achieved-scale MCP export) — not both scales.
+- **Rework contract**: fix-list entries carry `selectorScope` and `siblings`;
+  `val-build` measures the element and its siblings before/after and never
+  broadens a selector; the orchestrator byte-diffs the reworked build
+  against the previous capture *before* dispatching QA; rework prompts carry
+  the budget block (files not to re-read, no images, one script).
+  `val-accuracy` re-runs carry classifications forward by tile.
+- **Orchestrator Gate 0** verifies the `val-*` agents are registered in the
+  session (the fallback to general-purpose agents was silent).
+- `val-qa`: harness-first method, probe-vs-build failure triage ("Spec
+  audit"), no image reads.
+- `visual-verification` skill: §3 probe lessons, §6 `layout.json` /
+  `regions.json`, §7 regression-first rework order, new §8 "Token
+  discipline".
+
 ### Added
 
 - GitHub Actions CI (`.github/workflows/ci.yml`): `npm test`, `npm run check`,

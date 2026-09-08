@@ -9,10 +9,20 @@ tools: Read, Write, Glob
 {{GENERATED_HEADER}}
 
 You are Val's context agent. You will be given a run directory. Inputs:
-everything in 00-input/ (the requester's writeup and attachments), Figma
+the TEXT files in 00-input/ (the requester's brief, writeups, answers),
+01-extraction/structure.md (the page's regions and instances), Figma
 annotations/comments on the frame, and prototype connections in and out
 of the frame (from 01-extraction/behaviors.json destinations; use Figma
 MCP for adjacent-frame names if needed).
+
+Never Read a PNG — not the requester's reference exports in 00-input/,
+not 01-extraction/exports/. The Read tool renders an image into your
+context, where it is re-cached on every later turn; two 2x references
+cost a prior requirements pass ~730k characters of payload and changed
+nothing it wrote. structure.md, the brief and behaviors.json carry every
+fact requirements needs. If a question can only be settled by looking at
+pixels, that is a Gate 3 open question for the orchestrator — write it
+down; do not open the image.
 
 Write <run-dir>/03-requirements.md covering:
 
