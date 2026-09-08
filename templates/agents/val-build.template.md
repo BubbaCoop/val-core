@@ -41,8 +41,11 @@ vanilla HTML/CSS/JS, matching the repo's existing prototype conventions.
 Fonts via {{FONT_PACKAGES}} — {{TYPE_SYSTEM_NOTE}}.
 Consume the library through {{COMPONENT_CSS}} (component classes + tokens).
 Icons come from {{ICON_SPRITE}}, inlined per the vite-starter pattern —
-but inline ONLY the <symbol>s the page references (extract them with a
-few lines of node). The full sprite is ~500KB / ~2,000 symbols; a prior
+but inline ONLY the <symbol>s the page references:
+  node {{TOOLS_DIR}}/sprite-subset.mjs {{ICON_SPRITE}} --used-by 04-build/index.html --out 04-build/sprite.svg
+then paste that file's content in place of the sprite (it exits 1 and names
+any glyph the sprite lacks — that is a sprite gap to mark val:gap, never a
+reason to inline everything). The full sprite is ~500KB / ~2,000 symbols; a prior
 page used 5 of them and shipped a 536KB index.html that every QA,
 accuracy and rework pass then had to read.
 
@@ -83,12 +86,16 @@ Working method — write ONE script, run it ONCE. Your budget on an initial
 build is 25 tool uses (a prior initial build used 58 tool uses across 97
 model turns, and its ~140k-token context was re-cached on every one of
 them — 13.4M cache-read tokens for a two-state form). After the reads
-above, your FIRST artefact is 04-build/self-check.mjs: it renders every
-state, measures every region in layout.json, runs the behavior probes,
-scans styles.css for literals, and writes the full tables to
-04-build/self-check.md — printing at most 40 summary lines. Do not
-explore with per-probe Bash calls before that script exists; run it,
-read the summary, fix, run again. Rework budget: 8 tool uses. If the
+above and the page itself, your FIRST verification artefacts are
+04-build/regions.json (figmaNode → selector for every layout.json region;
+or put data-val-node="<figmaNode>" on the elements) and
+04-build/self-check.mjs (behavior probes + the styles.css literal scan,
+writing its tables to 04-build/self-check.md, printing ≤40 lines). Then
+run, once each:
+  node {{TOOLS_DIR}}/geometry-check.mjs <run-dir> --all
+  node 04-build/self-check.mjs
+Do not explore with per-probe Bash calls before those exist; run them,
+read the summaries, fix, run again. Rework budget: 8 tool uses. If the
 budget runs out with a check unresolved, SAY SO in your report — never
 skip it silently; the orchestrator decides whether to re-invoke you.
 
@@ -106,14 +113,15 @@ the checklist with per-item ✓/✗ to 04-build/self-check.md. Fix every ✗
 before ending.
 
 Geometry self-verification (part of the self-check, non-negotiable on
-initial builds): render the page headless at each frame's dimensions and
-achieved export scale (driving extra states through window.valPage), then
-assert (a) the rendered page dimensions equal the frame's, with no scroll
-at load unless the requirements say otherwise, and (b) every region in
-layout.json lands within ±2px of its x/y/w/h. Write the figmaNode →
-selector map you measured with to 04-build/regions.json (the accuracy
-and regression checks reuse it) and the measured-vs-expected table to
-self-check.md. The classic drift source is
+initial builds): node {{TOOLS_DIR}}/geometry-check.mjs <run-dir> --all
+renders each frame at its dimensions (driving extra states through
+window.valPage.applyState), then asserts (a) the rendered page dimensions
+equal the frame's, with no scroll at load unless the requirements say
+otherwise, (b) every region in layout.json lands within ±2px of its
+x/y/w/h via the selectors in 04-build/regions.json, and (c) zero console
+errors. It writes 04-build/geometry-<state>.{json,md}; every frame must
+report PASS before you finish, and self-check.md links to those files
+rather than re-tabulating them. The classic drift source is
 the hairline trap (Chrome renders 0.5px borders as 1px, adding height at
 every bordered boundary) and content-sized containers where the frame is
 fixed — catch these here, not at the accuracy gate: shipping unverified
@@ -135,7 +143,7 @@ the files the fix list names and self-check.md — not the extraction, not
 the requirements, not the component sources, and no images.
 
 Definition of done: page opens with zero console errors; self-check.md is
-all ✓.
+all ✓; geometry-<state>.json reports PASS for every frame.
 
 End with exactly one line — BLOCKED when questions.md is non-empty:
 BUILD: OK|BLOCKED | COMPONENTS: <n> | BEHAVIORS-WIRED: <n> | GAPS: <n> | QUESTIONS: <n>

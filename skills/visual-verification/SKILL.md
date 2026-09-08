@@ -143,6 +143,10 @@ classified into exactly one class, and **PASS requires zero class (c)**:
 Group adjacent tiles belonging to one element into one finding with a
 named region, component, Figma node, plain-language description and a
 suspected cause (`token | layout | component-variant | content | font`).
+`classify-tiles.mjs` does the mapping and grouping and attaches the numeric
+evidence (colour-set match, ink boxes, best horizontal shift and residual)
+with a *candidate* label per finding; the agent confirms each into (a)/(b)/(c)
+and views only the crops of `needs-review` findings.
 
 ## 6. Build-time geometry self-check (catch it before the gate)
 
@@ -151,8 +155,9 @@ dimensions and assert: (a) rendered page size equals the frame, no scroll
 at load unless required; (b) every region in the extraction's
 `layout.json` lands within ±2px of its x/y/w/h. Record measured-vs-expected
 and write the figmaNode → selector map to `04-build/regions.json` so the
-accuracy and regression checks reuse it. Write the check as **one script,
-run once** — not as a series of exploratory probes. The classic
+accuracy and regression checks reuse it. `geometry-check.mjs <run-dir>
+--all` is that check as one command (it also drives states through
+`window.valPage.applyState`); never rebuild it probe by probe. The classic
 drift sources are the hairline trap accumulating at every bordered
 boundary and content-sized containers where the frame is fixed. Shipping
 unverified geometry cost one run its largest rework cycle (~500k tokens).
@@ -166,8 +171,9 @@ errors, wrong page dimensions). QA always re-runs after any build change —
 visual fixes are the classic way behaviours break.
 
 After a rework, **byte-diff the previous and new build captures before
-dispatching QA**: changed pixels must lie inside the fix-list regions, and
-no fix region's mismatch against the reference may have grown. That check
+dispatching QA** (`regression-check.mjs --before … --after … --reference …
+--fixlist …`): changed pixels must lie inside the fix-list regions, and no
+fix region's mismatch against the reference may have grown. That check
 costs no model tokens and is the most conclusive evidence of what a rework
 touched; in one run it was the *last* thing measured, after a 73k-token QA
 re-run had already passed a build with a regressed icon. Fix lists name a

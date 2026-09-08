@@ -46,7 +46,8 @@ Invoke, in order (2 and 3 may run after 1 in either order):
   Gate 1: val-figma        → verify 01-extraction/ complete per its DoD
   Gate 2: val-components   → verify every instance mapped
   Gate 3: val-context      → verify requirements + open questions
-  Gate 4: val-build        → verify self-check.md all ✓
+  Gate 4: val-build        → verify self-check.md all ✓ and
+                             04-build/geometry-<state>.json PASS per frame
   Gate 5: val-qa           → verify QA: PASS
   Gate 6: val-accuracy     → verify verdict: zero genuine defects, one
                              comparison per frame at its best reference
@@ -129,17 +130,27 @@ If Gate 5 fails, or Gate 6 fails its verdict:
    but not its scope cost a prior run a 102k-token cycle: "label ink →
    Text/Primary" was applied to the whole Back button and recoloured its
    arrow.
-4. Re-invoke val-build with the fix list (rework mode) and the rework
-   budget block: files not to re-read, no images, one script.
-5. Regression check FIRST — before any QA dispatch. Capture the reworked
-   build at the same scale as the previous accuracy capture and
-   byte-diff the two (grid-diff, or a ten-line pngjs script): the
-   changed pixels must lie inside the fix-list regions, and for each fix
-   region the mismatch against the reference must not have grown.
-   Anything else is a regression — re-dispatch val-build immediately
-   with that finding added; do not spend a QA run on a build you already
-   know is wrong. This costs no model tokens and would have caught the
-   prior run's arrow regression before a 73k-token FULL QA re-run.
+4. Archive the current accuracy outputs so the re-run can diff against
+   them: for each frame, move 06-accuracy/[frames/<state>/]{build@2x.png,
+   diff-report.json,overlay.png} to 06-accuracy/[frames/<state>/]run-<n>/.
+   Write the fix list to 04-build/rework-<n>-fixlist.json. Re-invoke
+   val-build with it (rework mode) and the rework budget block: files not
+   to re-read, no images, one script.
+5. Regression check FIRST — before any QA dispatch, for each frame:
+     node {{TOOLS_DIR}}/screenshot.mjs <run-dir> --frame <state>
+     node {{TOOLS_DIR}}/regression-check.mjs <run-dir> --frame <state> \
+       --before 06-accuracy/[frames/<state>/]run-<n>/build@2x.png \
+       --after  06-accuracy/[frames/<state>/]build@2x.png \
+       --reference <the frame's reference from diff-report comparison.reference> \
+       --fixlist 04-build/rework-<n>-fixlist.json
+   It byte-diffs the two captures: every changed cluster must lie inside
+   a fix-list region (selectorScope resolved through layout.json by
+   figmaNode, or an explicit box), and no fix region's mismatch against
+   the reference may have grown. FAIL is a regression — re-dispatch
+   val-build immediately with regression-check.json's clusters added to
+   the fix list; do not spend a QA run on a build you already know is
+   wrong. This costs no model tokens and would have caught the prior
+   run's arrow regression before a 73k-token FULL QA re-run.
 6. Then re-run Gate 5 and Gate 6 (they may run in parallel — both read a
    frozen build and write to different directories). QA always re-runs
    after any build change; visual fixes are the classic way behaviors

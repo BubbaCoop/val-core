@@ -1,219 +1,166 @@
 #!/usr/bin/env node
 /**
  * Val tool — tile-by-tile visual diff of the built page against the design
- * export.
+ * export (or any reference).
  *
- * Usage: node <tools-dir>/grid-diff.mjs <run-dir>
+ * Usage: node <tools-dir>/grid-diff.mjs <run-dir> [flags]
  *
- * Reads:  <run-dir>/01-extraction/exports/page@2x.png   (design)
- *         <run-dir>/06-accuracy/build@2x.png            (build)
- *         <run-dir>/manifest.json                       (input.exportScale)
- * Writes: <run-dir>/06-accuracy/diff-report.json
- *         <run-dir>/06-accuracy/overlay.png
+ *   --frame <state|index>   which manifest input.frames[] entry (default: primary)
+ *   --reference <png>       override the reference image
+ *   --build <png>           override the build capture
+ *   --out <dir>             override the output directory
+ *   --scale <n>             override the device scale (tile = 64 CSS px × scale)
+ *   --baseline <report>     a previous diff-report.json: carry its per-tile
+ *                           classifications forward and report what changed
+ *
+ * Defaults (unchanged from 0.1.x for the primary frame):
+ *   reference  <run-dir>/01-extraction/exports/page@2x.png, or the frame's
+ *              recorded requester reference (frames[].reference) when present
+ *   build      <run-dir>/06-accuracy/build@2x.png
+ *   out        <run-dir>/06-accuracy/   → diff-report.json + overlay.png
+ *   scale      frames[].reference.scale, else manifest input.exportScale
+ * For frames[n>0] the defaults live under 01-extraction/frames/<state>/ and
+ * 06-accuracy/frames/<state>/.
  *
  * Dimension policy: never scale/stretch. Equal widths with a height delta
  * of <= 2% pads the shorter image with white at the bottom; anything else
  * exits non-zero printing both dimension pairs.
  *
- * Grid: fixed 64px tiles in CSS-pixel terms (64 x exportScale device px).
- * Partial edge tiles are allowed. Tiles >= 99.5% white in BOTH images are
- * marked empty and excluded from scoring.
- *
+ * Grid: fixed 64px tiles in CSS-pixel terms (64 x scale device px).
+ * Tiles >= 99.5% white in BOTH images are marked empty and excluded.
  * Classification per tile (pixelmatch, threshold 0.1, includeAA false):
- *   pass  < 2% mismatch
- *   warn  2–8%
- *   fail  > 8%
+ *   pass < 2% · warn 2–8% · fail > 8%
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { parseArgs, fail } from "./lib/args.mjs";
+import {
+  loadRun,
+  selectFrame,
+  accuracyDir,
+  referenceFor,
+  comparisonScale,
+} from "./lib/manifest.mjs";
+import { readPng, writePng, normalizeHeights, tileGrid, overlay, TILE_CSS_PX } from "./lib/png.mjs";
 
-import pixelmatch from "pixelmatch";
-import { PNG } from "pngjs";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
+const { positional, opts } = parseArgs(process.argv.slice(2));
+const runDir = positional[0];
+if (!runDir) fail("Usage: node <tools-dir>/grid-diff.mjs <run-dir> [--frame s] [--reference png] [--build png] [--out dir] [--scale n] [--baseline report]");
 
-const TILE_CSS_PX = 64;
-const PIXELMATCH_OPTS = { threshold: 0.1, includeAA: false };
-const WHITE_MIN = 250; // channel floor for "white" when detecting empty tiles
-const EMPTY_WHITE_RATIO = 0.995;
-const PASS_MAX = 2; // < 2% mismatch
-const WARN_MAX = 8; // 2–8% warn, > 8% fail
-const HEIGHT_PAD_TOLERANCE = 0.02;
+let run;
+try {
+  run = loadRun(runDir);
+} catch (e) {
+  // 0.1.x behaviour: a run without a manifest still diffs with defaults.
+  run = { runPath: resolve(runDir), manifest: { input: { exportScale: 2 } }, frames: null };
+}
+const { runPath, manifest } = run;
+const frame = run.frames ? selectFrame(run.frames, opts.frame) : { index: 0, state: "default", reference: null };
 
-const runDir = process.argv[2];
-if (!runDir) {
-  console.error("Usage: node <tools-dir>/grid-diff.mjs <run-dir>");
-  process.exit(1);
+const ref = opts.reference
+  ? { path: resolve(opts.reference), scale: null, source: "explicit" }
+  : referenceFor(runPath, frame, manifest);
+const outDir = opts.out ? resolve(opts.out) : accuracyDir(runPath, frame);
+const buildPath = opts.build ? resolve(opts.build) : join(outDir, "build@2x.png");
+const scale = opts.scale ? Number(opts.scale) : ref.scale ?? comparisonScale(frame, manifest);
+
+for (const p of [ref.path, buildPath]) {
+  if (!existsSync(p)) fail(`Missing input image: ${p}`);
+}
+mkdirSync(outDir, { recursive: true });
+
+let design;
+let build;
+let padded;
+try {
+  const n = normalizeHeights(readPng(ref.path), readPng(buildPath));
+  design = n.a;
+  build = n.b;
+  padded = n.padded;
+} catch (e) {
+  fail(e.message.replace("a:", "design:").replace("b:", "build:"));
 }
 
-const runPath = resolve(runDir);
-const designPath = join(runPath, "01-extraction", "exports", "page@2x.png");
-const buildPath = join(runPath, "06-accuracy", "build@2x.png");
-
-for (const p of [designPath, buildPath]) {
-  if (!existsSync(p)) {
-    console.error(`Missing input image: ${p}`);
-    process.exit(1);
-  }
-}
-
-let exportScale = 2;
-const manifestPath = join(runPath, "manifest.json");
-if (existsSync(manifestPath)) {
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  exportScale = manifest?.input?.exportScale ?? 2;
-}
-const tilePx = TILE_CSS_PX * exportScale; // tile size in device pixels
-
-let design = PNG.sync.read(readFileSync(designPath));
-let build = PNG.sync.read(readFileSync(buildPath));
-
-// ---- dimension normalization (pad only, never scale) ----------------------
-if (design.width !== build.width) {
-  console.error(
-    `Width mismatch — cannot diff. design: ${design.width}x${design.height}, build: ${build.width}x${build.height}`,
-  );
-  process.exit(1);
-}
-if (design.height !== build.height) {
-  const taller = Math.max(design.height, build.height);
-  const delta = Math.abs(design.height - build.height) / taller;
-  if (delta > HEIGHT_PAD_TOLERANCE) {
-    console.error(
-      `Height mismatch beyond ${HEIGHT_PAD_TOLERANCE * 100}% — cannot diff. ` +
-        `design: ${design.width}x${design.height}, build: ${build.width}x${build.height}`,
-    );
-    process.exit(1);
-  }
-  if (design.height < taller) design = padToHeight(design, taller);
-  if (build.height < taller) build = padToHeight(build, taller);
-}
-
-function padToHeight(png, height) {
-  const out = new PNG({ width: png.width, height });
-  out.data.fill(255); // white, opaque
-  png.data.copy(out.data, 0, 0, png.width * png.height * 4);
-  return out;
-}
-
-const { width, height } = design;
-const cols = Math.ceil(width / tilePx);
-const rows = Math.ceil(height / tilePx);
-
-// ---- helpers ---------------------------------------------------------------
-function cropTile(png, x0, y0, tw, th) {
-  const out = new Uint8Array(tw * th * 4);
-  for (let y = 0; y < th; y++) {
-    const srcStart = ((y0 + y) * png.width + x0) * 4;
-    const row = png.data.subarray(srcStart, srcStart + tw * 4);
-    out.set(row, y * tw * 4);
-  }
-  return out;
-}
-
-function whiteRatio(rgba) {
-  const total = rgba.length / 4;
-  let white = 0;
-  for (let i = 0; i < rgba.length; i += 4) {
-    if (
-      rgba[i] >= WHITE_MIN &&
-      rgba[i + 1] >= WHITE_MIN &&
-      rgba[i + 2] >= WHITE_MIN &&
-      rgba[i + 3] >= WHITE_MIN
-    ) {
-      white++;
-    }
-  }
-  return white / total;
-}
-
-// ---- tile loop -------------------------------------------------------------
-const tiles = [];
-let pass = 0;
-let warn = 0;
-let fail = 0;
-let nonEmptyTiles = 0;
-
-for (let row = 0; row < rows; row++) {
-  for (let col = 0; col < cols; col++) {
-    const x0 = col * tilePx;
-    const y0 = row * tilePx;
-    const tw = Math.min(tilePx, width - x0); // partial edge tiles allowed
-    const th = Math.min(tilePx, height - y0);
-
-    const a = cropTile(design, x0, y0, tw, th);
-    const b = cropTile(build, x0, y0, tw, th);
-
-    // Reported coordinates are CSS pixels.
-    const base = {
-      col,
-      row,
-      x: Math.round(x0 / exportScale),
-      y: Math.round(y0 / exportScale),
-    };
-
-    if (
-      whiteRatio(a) >= EMPTY_WHITE_RATIO &&
-      whiteRatio(b) >= EMPTY_WHITE_RATIO
-    ) {
-      tiles.push({ ...base, empty: true });
-      continue;
-    }
-
-    nonEmptyTiles++;
-    const mismatched = pixelmatch(a, b, null, tw, th, PIXELMATCH_OPTS);
-    const mismatchPct = (mismatched / (tw * th)) * 100;
-
-    let cls;
-    if (mismatchPct < PASS_MAX) {
-      cls = "pass";
-      pass++;
-    } else if (mismatchPct <= WARN_MAX) {
-      cls = "warn";
-      warn++;
-    } else {
-      cls = "fail";
-      fail++;
-    }
-
-    tiles.push({
-      ...base,
-      mismatchPct: Math.round(mismatchPct * 10) / 10,
-      class: cls,
-    });
-  }
-}
-
-const passPct = nonEmptyTiles
-  ? Math.round((pass / nonEmptyTiles) * 1000) / 10
-  : 100;
+const grid = tileGrid(design, build, scale);
+const rel = (p) => relative(runPath, p) || p;
 
 const report = {
   tileSizePx: TILE_CSS_PX,
-  exportScale,
-  imagePx: { width, height },
-  grid: { cols, rows },
-  summary: { nonEmptyTiles, pass, warn, fail, passPct },
-  tiles,
+  exportScale: scale,
+  comparison: {
+    frame: frame.id ?? null,
+    state: frame.state,
+    reference: rel(ref.path),
+    referenceSource: ref.source,
+    build: rel(buildPath),
+    scale,
+  },
+  imagePx: { width: design.width, height: design.height },
+  heightNormalization: padded,
+  grid: { cols: grid.cols, rows: grid.rows },
+  summary: grid.summary,
+  tiles: grid.tiles,
 };
 
-writeFileSync(
-  join(runPath, "06-accuracy", "diff-report.json"),
-  JSON.stringify(report, null, 2),
-);
+// ---- baseline carry-forward -------------------------------------------------
+if (opts.baseline) {
+  const basePath = resolve(opts.baseline);
+  if (!existsSync(basePath)) fail(`Baseline report not found: ${basePath}`);
+  const base = JSON.parse(readFileSync(basePath, "utf8"));
+  const key = (t) => `${t.col},${t.row}`;
+  const prev = new Map((base.tiles ?? []).map((t) => [key(t), t]));
 
-// ---- overlay: build at 50% opacity over the design --------------------------
-const overlay = new PNG({ width, height });
-for (let i = 0; i < overlay.data.length; i += 4) {
-  overlay.data[i] = (design.data[i] + build.data[i]) >> 1;
-  overlay.data[i + 1] = (design.data[i + 1] + build.data[i + 1]) >> 1;
-  overlay.data[i + 2] = (design.data[i + 2] + build.data[i + 2]) >> 1;
-  overlay.data[i + 3] = 255;
+  // Per-tile classification from the previous run: explicit tileClassification
+  // (object or array) first, else derived from findings[].tiles.
+  const prevClass = new Map();
+  const tc = base.tileClassification;
+  for (const t of Array.isArray(tc) ? tc : Object.values(tc ?? {})) {
+    if (t && t.col !== undefined) prevClass.set(key(t), { classification: t.classification, finding: t.finding ?? null });
+  }
+  for (const f of base.findings ?? []) {
+    for (const t of f.tiles ?? []) {
+      const k = typeof t === "string" ? t : key(t);
+      if (!prevClass.has(k)) prevClass.set(k, { classification: f.classification ?? null, finding: f.id ?? f.region ?? null });
+    }
+  }
+
+  const tileClassDeltas = [];
+  const newNonPassTiles = [];
+  const resolvedTiles = [];
+  const carriedClassification = {};
+  for (const t of grid.tiles) {
+    const p = prev.get(key(t));
+    const nowNonPass = !t.empty && t.class !== "pass";
+    const wasNonPass = p && !p.empty && p.class !== "pass";
+    if (p && (p.class !== t.class || p.mismatchPct !== t.mismatchPct)) {
+      tileClassDeltas.push({ col: t.col, row: t.row, before: [p.class ?? "empty", p.mismatchPct ?? null], after: [t.class ?? "empty", t.mismatchPct ?? null] });
+    }
+    if (nowNonPass && !wasNonPass) newNonPassTiles.push(t);
+    if (!nowNonPass && wasNonPass) resolvedTiles.push({ col: t.col, row: t.row });
+    if (nowNonPass && prevClass.has(key(t))) carriedClassification[key(t)] = prevClass.get(key(t));
+  }
+  report.baseline = {
+    path: rel(basePath),
+    summary: base.summary ?? null,
+    tileClassDeltas,
+    newNonPassTiles,
+    resolvedTiles,
+    carriedClassification,
+    carriedCount: Object.keys(carriedClassification).length,
+    uncarriedNonPass: grid.tiles.filter((t) => !t.empty && t.class !== "pass" && !carriedClassification[key(t)]).map((t) => ({ col: t.col, row: t.row, class: t.class, mismatchPct: t.mismatchPct })),
+  };
 }
-writeFileSync(
-  join(runPath, "06-accuracy", "overlay.png"),
-  PNG.sync.write(overlay),
-);
 
-console.log(
-  `Grid ${cols}x${rows} (${TILE_CSS_PX}px tiles @ ${exportScale}x) — ` +
-    `${nonEmptyTiles} non-empty tiles: ${pass} pass, ${warn} warn, ${fail} fail — passPct ${passPct}%`,
-);
+writeFileSync(join(outDir, "diff-report.json"), JSON.stringify(report, null, 2));
+writePng(join(outDir, "overlay.png"), overlay(design, build));
+
+const s = grid.summary;
+let line =
+  `Grid ${grid.cols}x${grid.rows} (${TILE_CSS_PX}px tiles @ ${scale}x) — ` +
+  `${s.nonEmptyTiles} non-empty tiles: ${s.pass} pass, ${s.warn} warn, ${s.fail} fail — passPct ${s.passPct}%`;
+if (padded) line += ` (padded: ${JSON.stringify(padded)})`;
+if (report.baseline) {
+  const b = report.baseline;
+  line += `\nvs baseline: ${b.tileClassDeltas.length} tile delta(s), ${b.newNonPassTiles.length} new non-pass, ${b.resolvedTiles.length} resolved, ${b.carriedCount} classification(s) carried, ${b.uncarriedNonPass.length} to adjudicate`;
+}
+console.log(line);

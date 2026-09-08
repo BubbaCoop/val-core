@@ -27,7 +27,12 @@ jobs:
 
       - run: npm ci
 
-      - name: test (grid-diff fixtures)
+      # The geometry-check and QA-harness tests drive headless Chromium; the
+      # pixel tools' tests do not. Both skip cleanly if the browser is absent,
+      # so install it here to make them count.
+      - run: npx playwright install --with-deps chromium
+
+      - name: test (tool fixtures + browser checks)
         run: npm test
 
       # Renders every template against val.config.example.json in dry-run

@@ -52,6 +52,49 @@ two-thirds cache writes). Every change targets context size × turn count.
   `regions.json`, §7 regression-first rework order, new §8 "Token
   discipline".
 
+### Added — tools (the second half of the efficiency pass)
+
+Each replaces a script an agent hand-wrote in the audited run. Existing
+invocations (`screenshot.mjs <run-dir>`, `grid-diff.mjs <run-dir>`) behave
+exactly as before; 0.1.x manifests (`input.frame` / `input.figmaUrl`) still
+resolve.
+
+- `tools/lib/` — shared manifest resolution (`input.frames[]` with the 0.1.x
+  fallback, per-frame directories, best reference + scale) and pixel helpers
+  (the tile grid and its policy, padding, byte-diff clusters, colour
+  histograms, ink boxes, horizontal-shift search, side-by-side crops).
+- `screenshot.mjs`: `--frame`, `--state` (via `window.valPage.applyState`),
+  `--setup`, `--scale`, `--out`, `--height`; writes `capture.json`.
+- `grid-diff.mjs`: `--frame`, `--reference`, `--build`, `--out`, `--scale`,
+  `--baseline` (carries per-tile classifications forward; reports
+  `tileClassDeltas`, `newNonPassTiles`, `resolvedTiles`, `uncarriedNonPass`);
+  the report gains a `comparison` block naming reference, source and scale.
+- New `geometry-check.mjs` — the build gate's geometry self-check as one
+  command (`--all` frames; `regions.json` or `data-val-node` selectors).
+- New `classify-tiles.mjs` — non-pass tiles → layout-mapped findings with
+  numeric evidence and candidate labels; `--accepted`, `--crops`.
+- New `regression-check.mjs` — byte-diff of two captures against a fix list
+  and a reference; PASS/FAIL/INFO; zero model tokens. Fix-list entries may
+  carry `siblings` (elements the fix must leave alone): a change there is in
+  scope, but the region must not get worse against the reference — strict,
+  by design. Validated on the audited run's own captures: run-1→run-2 FAILs
+  on `F7:sibling:arrow-left icon 6.5% → 8%` (the F13 regression, caught
+  before the 73k-token QA re-run that found it); run-2→final PASSes with
+  62 px changed, exactly the arrow's box.
+- New `sprite-subset.mjs` — only the `<symbol>`s a page uses.
+- New `qa/harness.mjs`, `qa/standing.mjs`, `qa/example.spec.mjs` — the
+  Playwright plumbing and the six standing checks for `05-qa.spec.mjs`.
+- `val.config.schema.json`: optional `paths.qaProbes` (library-specific QA
+  probe hooks); `{{QA_PROBES_PATH}}` placeholder.
+- `val-init` prints a reminder to start a new session after generating.
+- Tests for every tool (`npm test`); CI installs Chromium so the
+  browser-backed tests run.
+- Templates now name the tools: `val-build` runs `geometry-check --all` and
+  `sprite-subset`; `val-accuracy` runs screenshot/grid-diff/classify-tiles
+  per frame and `--baseline` on re-runs; `val-qa` starts from the example
+  spec and the harness; the orchestrator archives `run-<n>/` and runs
+  `regression-check` before any QA dispatch.
+
 ### Added
 
 - GitHub Actions CI (`.github/workflows/ci.yml`): `npm test`, `npm run check`,
