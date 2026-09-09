@@ -4,26 +4,40 @@
   "title": "Val library configuration (val/config.json)",
   "description": "Everything that differs between Valiify component libraries. val-init substitutes these values into the shared agent templates. Anything NOT in here is shared methodology and belongs in the templates or the core skills.",
   "type": "object",
-  "required": ["library", "paths"],
+  "required": [
+    "library",
+    "paths"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
-
+    "$schema": {
+      "type": "string"
+    },
     "library": {
       "type": "object",
-      "required": ["name", "displayName", "figmaFileKey"],
+      "required": [
+        "name",
+        "displayName",
+        "figmaFileKey"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
           "description": "Machine name — used in run ids and generated headers.",
           "pattern": "^[a-z][a-z0-9-]*$",
-          "examples": ["shortapp", "dashboard"]
+          "examples": [
+            "shortapp",
+            "dashboard"
+          ]
         },
         "displayName": {
           "type": "string",
           "description": "Human name used in agent prose ('the Short App type system…').",
-          "examples": ["Short App", "Dashboard"]
+          "examples": [
+            "Short App",
+            "Dashboard"
+          ]
         },
         "figmaFileKey": {
           "type": "string",
@@ -36,38 +50,88 @@
         }
       }
     },
-
     "paths": {
       "type": "object",
-      "required": ["designSystemSkill"],
+      "required": [
+        "designSystemSkill"
+      ],
       "additionalProperties": false,
       "description": "All repo-relative. Defaults match the Valiify library layout; override only where a repo differs.",
       "properties": {
         "designSystemSkill": {
           "type": "string",
           "description": "The library-specific design-language skill (components, tokens, casing rules). Stays in the library repo — never in val-core.",
-          "examples": [".claude/skills/valiify-shortapp-ui/SKILL.md"]
+          "examples": [
+            ".claude/skills/valiify-shortapp-ui/SKILL.md"
+          ]
         },
-        "componentRegistry": { "type": "string", "default": "val/registry/components.json" },
-        "tokenSource": { "type": "string", "default": "src/themes/valiify.css", "description": "Generated theme CSS the build agent reads token names from." },
-        "componentCss": { "type": "string", "default": "dist/index.css", "description": "The built library the val page consumes." },
-        "iconSprite": { "type": "string", "default": "src/icons/sprite.svg" },
-        "storiesDir": { "type": "string", "default": "stories/components", "description": "Storybook stories the registry generator scans; also the staleness reference for the registry." },
-        "componentsDir": { "type": "string", "default": "src/components" },
-        "runOutputDir": { "type": "string", "default": "val/runs" },
-        "toolsDir": { "type": "string", "default": "val/tools", "description": "Where val-init symlinks the core tools." },
-        "figmaTokensJson": { "type": "string", "default": "tokens/figma-tokens.json", "description": "Extract pipeline: the token source-of-truth new variables are added to." },
-        "buildThemeScript": { "type": "string", "default": "scripts/build-theme.mjs" },
-        "visualSpecsScript": { "type": "string", "default": "scripts/visual-specs.mjs" },
-        "componentProcessDoc": { "type": "string", "default": "docs/component-process.md" },
+        "componentRegistry": {
+          "type": "string",
+          "default": "val/registry/components.json"
+        },
+        "tokenSource": {
+          "type": "string",
+          "default": "src/themes/valiify.css",
+          "description": "Generated theme CSS the build agent reads token names from."
+        },
+        "componentCss": {
+          "type": "string",
+          "default": "dist/index.css",
+          "description": "The built library the val page consumes."
+        },
+        "iconSprite": {
+          "type": "string",
+          "default": "src/icons/sprite.svg"
+        },
+        "storiesDir": {
+          "type": "string",
+          "default": "stories/components",
+          "description": "Storybook stories the registry generator scans; also the staleness reference for the registry."
+        },
+        "componentsDir": {
+          "type": "string",
+          "default": "src/components"
+        },
+        "runOutputDir": {
+          "type": "string",
+          "default": "val/runs"
+        },
+        "toolsDir": {
+          "type": "string",
+          "default": "val/tools",
+          "description": "Where val-init symlinks the core tools."
+        },
+        "figmaTokensJson": {
+          "type": "string",
+          "default": "tokens/figma-tokens.json",
+          "description": "Extract pipeline: the token source-of-truth new variables are added to."
+        },
+        "buildThemeScript": {
+          "type": "string",
+          "default": "scripts/build-theme.mjs"
+        },
+        "visualSpecsScript": {
+          "type": "string",
+          "default": "scripts/visual-specs.mjs"
+        },
+        "componentProcessDoc": {
+          "type": "string",
+          "default": "docs/component-process.md"
+        },
         "claudeMdSections": {
           "type": "string",
           "default": "Design Tokens + Quick Reference",
           "description": "Which CLAUDE.md sections the build agent must read fresh."
+        },
+        "qaProbes": {
+          "type": "string",
+          "description": "Optional. An ESM module exporting library-specific QA probe hooks (hoverExclude, focusTargetMap, settleMs, menus, disclosures) that tools/qa/standing.mjs merges under the page's own config. Generic Playwright plumbing stays in val-core; only what is specific to this library's components goes here.",
+          "examples": [
+            "val/qa-probes.mjs"
+          ]
         }
       }
     },
-
     "typography": {
       "type": "object",
       "additionalProperties": false,
@@ -75,10 +139,22 @@
       "properties": {
         "fonts": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["@fontsource/inter"],
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "@fontsource/inter"
+          ],
           "description": "Font packages the built page imports.",
-          "examples": [["@fontsource/inter"], ["@fontsource/inter", "@fontsource/jetbrains-mono"]]
+          "examples": [
+            [
+              "@fontsource/inter"
+            ],
+            [
+              "@fontsource/inter",
+              "@fontsource/jetbrains-mono"
+            ]
+          ]
         },
         "systemNote": {
           "type": "string",
@@ -98,7 +174,6 @@
         }
       }
     },
-
     "audience": {
       "type": "string",
       "description": "Sentence for val-context §1 describing which audiences/registers this library serves and how that selects component families.",
@@ -107,14 +182,21 @@
         "reviewer-facing or applicant-facing (this selects the design language register)."
       ]
     },
-
     "pipelines": {
       "type": "object",
       "additionalProperties": false,
       "description": "Which pipelines to generate. Both default to true.",
       "properties": {
-        "val": { "type": "boolean", "default": true, "description": "Page assembly: /val + val-* agents." },
-        "extract": { "type": "boolean", "default": true, "description": "Component extraction: /extract + extract-* lanes." }
+        "val": {
+          "type": "boolean",
+          "default": true,
+          "description": "Page assembly: /val + val-* agents."
+        },
+        "extract": {
+          "type": "boolean",
+          "default": true,
+          "description": "Component extraction: /extract + extract-* lanes."
+        }
       }
     }
   }

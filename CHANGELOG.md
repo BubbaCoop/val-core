@@ -11,6 +11,96 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-08
+
+Minor, not patch: `input.frames[]` is a new manifest shape (additive —
+`input.frame` stays as a mirror of `frames[0]`, so 0.1.x runs and tools keep
+working), and there are new tools and an optional config key.
+
+### Changed — templates and skills
+
+Efficiency pass driven by the audit of run `2026-09-07-bsa-account-information`
+(1.36M harness tokens / 540 model turns; weighted ~12.5M input-equivalent,
+two-thirds cache writes). Every change targets context size × turn count.
+
+- **Image discipline in every `val-*` agent and the orchestrator.**
+  `val-context` reads only the text files in `00-input/`; `val-build` never
+  opens the 2x references or its own renders (1x section crops only when a
+  gap requires seeing the design); `val-accuracy` views only native-scale
+  crops for findings it cannot classify numerically; `val-qa` and the
+  orchestrator never view images.
+- **"Write one script, run it once" with tool-use budgets** in `val-build`
+  (25 initial / 8 rework), `val-accuracy` (20 / 8) and `val-qa` (20 / 8),
+  with the same explicit-escape clause `extract-visual` already uses.
+- **`val-build` context**: `figma.json` is a lookup table (as in
+  `val-components`); the new `01-extraction/layout.json` is the geometry
+  source; only the sprite `<symbol>`s a page uses are inlined (the full
+  sprite produced a 536KB `index.html`). The geometry check writes
+  `04-build/regions.json`.
+- **Multi-state screens are first-class**: manifest `input.frames[]` (first
+  entry primary at `01-extraction/` root, others under
+  `01-extraction/frames/<state>/`), `frames[].reference` for requester 2x
+  exports, and the `window.valPage.{applyState,setValue,getState}` page
+  contract. Replaces the single `input.figmaUrl` / `input.frame`.
+- **Accuracy comparisons**: one per frame at its best reference (requester
+  2x export, else the achieved-scale MCP export) — not both scales.
+- **Rework contract**: fix-list entries carry `selectorScope` and `siblings`;
+  `val-build` measures the element and its siblings before/after and never
+  broadens a selector; the orchestrator byte-diffs the reworked build
+  against the previous capture *before* dispatching QA; rework prompts carry
+  the budget block (files not to re-read, no images, one script).
+  `val-accuracy` re-runs carry classifications forward by tile.
+- **Orchestrator Gate 0** verifies the `val-*` agents are registered in the
+  session (the fallback to general-purpose agents was silent).
+- `val-qa`: harness-first method, probe-vs-build failure triage ("Spec
+  audit"), no image reads.
+- `visual-verification` skill: §3 probe lessons, §6 `layout.json` /
+  `regions.json`, §7 regression-first rework order, new §8 "Token
+  discipline".
+
+### Added — tools (the second half of the efficiency pass)
+
+Each replaces a script an agent hand-wrote in the audited run. Existing
+invocations (`screenshot.mjs <run-dir>`, `grid-diff.mjs <run-dir>`) behave
+exactly as before; 0.1.x manifests (`input.frame` / `input.figmaUrl`) still
+resolve.
+
+- `tools/lib/` — shared manifest resolution (`input.frames[]` with the 0.1.x
+  fallback, per-frame directories, best reference + scale) and pixel helpers
+  (the tile grid and its policy, padding, byte-diff clusters, colour
+  histograms, ink boxes, horizontal-shift search, side-by-side crops).
+- `screenshot.mjs`: `--frame`, `--state` (via `window.valPage.applyState`),
+  `--setup`, `--scale`, `--out`, `--height`; writes `capture.json`.
+- `grid-diff.mjs`: `--frame`, `--reference`, `--build`, `--out`, `--scale`,
+  `--baseline` (carries per-tile classifications forward; reports
+  `tileClassDeltas`, `newNonPassTiles`, `resolvedTiles`, `uncarriedNonPass`);
+  the report gains a `comparison` block naming reference, source and scale.
+- New `geometry-check.mjs` — the build gate's geometry self-check as one
+  command (`--all` frames; `regions.json` or `data-val-node` selectors).
+- New `classify-tiles.mjs` — non-pass tiles → layout-mapped findings with
+  numeric evidence and candidate labels; `--accepted`, `--crops`.
+- New `regression-check.mjs` — byte-diff of two captures against a fix list
+  and a reference; PASS/FAIL/INFO; zero model tokens. Fix-list entries may
+  carry `siblings` (elements the fix must leave alone): a change there is in
+  scope, but the region must not get worse against the reference — strict,
+  by design. Validated on the audited run's own captures: run-1→run-2 FAILs
+  on `F7:sibling:arrow-left icon 6.5% → 8%` (the F13 regression, caught
+  before the 73k-token QA re-run that found it); run-2→final PASSes with
+  62 px changed, exactly the arrow's box.
+- New `sprite-subset.mjs` — only the `<symbol>`s a page uses.
+- New `qa/harness.mjs`, `qa/standing.mjs`, `qa/example.spec.mjs` — the
+  Playwright plumbing and the six standing checks for `05-qa.spec.mjs`.
+- `val.config.schema.json`: optional `paths.qaProbes` (library-specific QA
+  probe hooks); `{{QA_PROBES_PATH}}` placeholder.
+- `val-init` prints a reminder to start a new session after generating.
+- Tests for every tool (`npm test`); CI installs Chromium so the
+  browser-backed tests run.
+- Templates now name the tools: `val-build` runs `geometry-check --all` and
+  `sprite-subset`; `val-accuracy` runs screenshot/grid-diff/classify-tiles
+  per frame and `--baseline` on re-runs; `val-qa` starts from the example
+  spec and the harness; the orchestrator archives `run-<n>/` and runs
+  `regression-check` before any QA dispatch.
+
 ### Added
 
 - GitHub Actions CI (`.github/workflows/ci.yml`): `npm test`, `npm run check`,
@@ -49,6 +139,7 @@ README "Releasing".
 - Tools: `grid-diff.mjs` (tested), `screenshot.mjs`, `generate-registry.mjs`.
 - Skills: `extract-methodology`, `visual-verification`, `component-mapping`.
 
-[Unreleased]: https://github.com/BubbaCoop/val-core/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/BubbaCoop/val-core/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BubbaCoop/val-core/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/BubbaCoop/val-core/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BubbaCoop/val-core/releases/tag/v0.1.0

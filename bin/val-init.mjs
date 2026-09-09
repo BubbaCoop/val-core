@@ -101,6 +101,9 @@ const substitutions = {
   COMPONENT_PROCESS_DOC: paths.componentProcessDoc,
   CLAUDE_MD_SECTIONS: paths.claudeMdSections,
   CORE_SKILLS_DIR: `${CORE_PKG_DIR}/skills`,
+  QA_PROBES_PATH:
+    paths.qaProbes ??
+    "none configured (optional: set paths.qaProbes in val/config.json to a module exporting library probe hooks)",
   FONT_PACKAGES: fontList,
   TYPE_SYSTEM_NOTE:
     typography.systemNote ??
@@ -225,6 +228,12 @@ if (CHECK) {
     `\n✓ ${changes} file(s) written. Review with \`git diff .claude/\`, then stage: ` +
       `git add .claude/ ${paths.toolsDir}`,
   );
+  if (changes) {
+    console.log(
+      "  Then start a NEW Claude Code session before running /val — generated agents register at session start; " +
+        "in the current session the pipeline would fall back to general-purpose agents.",
+    );
+  }
 }
 
 // ---- helpers ------------------------------------------------------------------

@@ -105,7 +105,7 @@ does not know. Current set: `LIBRARY_NAME`, `LIBRARY_DISPLAY_NAME`,
 `BUILD_THEME_SCRIPT`, `VISUAL_SPECS_SCRIPT`, `COMPONENT_PROCESS_DOC`,
 `CLAUDE_MD_SECTIONS`, `CORE_SKILLS_DIR`, `FONT_PACKAGES`,
 `TYPE_SYSTEM_NOTE`, `DATA_TYPOGRAPHY_RULE`, `AUDIENCE_NOTE`,
-`GENERATED_HEADER`.
+`QA_PROBES_PATH`, `GENERATED_HEADER`.
 
 **Rule for template authors:** a line is either generic methodology or a
 substituted config value. Library-specific prose (a font constraint, a
@@ -114,16 +114,48 @@ in the config, the library's design-system skill, or the registry.
 
 ## Tools
 
-All take a Val run directory and are reached through the `val/tools` link:
+All take a Val run directory and are reached through the `val/tools` link.
+Defaults act on the primary frame; `--frame <state>` selects another entry of
+the manifest's `input.frames[]` (its files live under `…/frames/<state>/`).
 
-- `grid-diff.mjs <run-dir>` — 64px-tile pixelmatch of design export vs
-  build screenshot; pad-only normalization; writes `diff-report.json` +
-  `overlay.png`. Tested: `npm test`.
-- `screenshot.mjs <run-dir>` — headless full-page capture at the
-  manifest's frame width and export scale; records console errors.
+- `screenshot.mjs <run-dir> [--frame s] [--state name] [--setup script.mjs] [--scale n] [--out dir]`
+  — headless full-page capture at the frame's width and comparison scale;
+  drives states through `window.valPage.applyState`; records console errors.
+- `grid-diff.mjs <run-dir> [--frame s] [--reference png] [--build png] [--out dir] [--scale n] [--baseline report]`
+  — 64px-tile pixelmatch against the frame's best reference (the requester's
+  2x export when recorded, else the MCP export); pad-only normalization;
+  `--baseline` carries a previous report's per-tile classifications forward
+  and lists what changed. Writes `diff-report.json` + `overlay.png`.
+- `classify-tiles.mjs <run-dir> [--frame s] [--accepted json] [--crops [all]]`
+  — maps non-pass tiles to `layout.json` regions, groups them into findings
+  with numeric evidence (colour histograms, ink boxes, best horizontal shift)
+  and pre-labels each `accepted-candidate` / `artifact-candidate` /
+  `needs-review`; optional native-scale reference|build crops for the last.
+- `geometry-check.mjs <run-dir> [--frame s | --all] [--tolerance px]`
+  — the build gate's geometry self-check in one command: renders each frame,
+  asserts page size / no scroll / every `layout.json` region within ±2px
+  (selectors from `04-build/regions.json` or `data-val-node`), zero console
+  errors. Writes `geometry-<state>.{json,md}`; exit 1 on any miss.
+- `regression-check.mjs <run-dir> --before png --after png [--reference png] [--fixlist json]`
+  — byte-diff of two captures clustered into regions; with a fix list, every
+  changed cluster must lie inside a fix region (or a listed sibling) and no
+  fix or sibling region may get worse against the reference — strict by
+  design. Zero model tokens; run before dispatching QA.
+- `sprite-subset.mjs <sprite.svg> --used-by index.html [--out file]`
+  — emits only the `<symbol>`s a page references (5 instead of 2,000).
+- `qa/harness.mjs` + `qa/standing.mjs` (import, not run) — the Playwright
+  plumbing for `05-qa.spec.mjs`: fresh context per test, error collectors,
+  token-resolving style reads, mouse parking, outline-or-shadow focus rings,
+  a Tab-order pass, rendered-ink measurement, the report writer, and the six
+  standing checks (hover, expand/collapse, sticky, resize, keyboard, console)
+  with auto-discovery. Start from `qa/example.spec.mjs`. Library-specific
+  probe hooks go in the module named by `paths.qaProbes` (optional).
 - `generate-registry.mjs [repo-root]` — Storybook stories → component
   registry; reads paths from `val/config.json`; hand-added enrichment
   survives regeneration.
+
+Tested: `npm test` (pixel tools with fixtures; geometry-check and the QA
+harness against headless Chromium — skipped if it is not installed).
 
 ## Skills
 

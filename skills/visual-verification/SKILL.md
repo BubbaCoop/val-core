@@ -86,6 +86,18 @@ Rules:
 - Assert what a state does **NOT** change (Checkbox's ring stays constant;
   the label ink never fades) — those are the regressions a hand edit
   introduces.
+- **Probe lessons from Val QA runs** (10 of 11 first-run failures in one
+  run were probes, not the build):
+  - Park the mouse in empty margin before reading a *rest* style — the
+    pointer left over the last clicked element keeps `:hover` applied.
+  - A focus ring may be an `outline` **or** a `box-shadow`; accept either,
+    then assert the computed-style delta on every Tab stop.
+  - Never `page.fill()` before a Tab pass — it moves Chromium's
+    sequential-focus start point. Drive state through the page's own API
+    (`window.valPage.applyState`) on a fresh page, then Tab from `body`.
+  - From `body`, Shift+Tab lands on the **last** focusable element.
+  - Measure page growth on the content/footer boxes, not
+    `document.scrollHeight` — a `min-height: 100vh` body hides it.
 
 ## 4. Page-level accuracy: the grid diff
 
@@ -131,13 +143,21 @@ classified into exactly one class, and **PASS requires zero class (c)**:
 Group adjacent tiles belonging to one element into one finding with a
 named region, component, Figma node, plain-language description and a
 suspected cause (`token | layout | component-variant | content | font`).
+`classify-tiles.mjs` does the mapping and grouping and attaches the numeric
+evidence (colour-set match, ink boxes, best horizontal shift and residual)
+with a *candidate* label per finding; the agent confirms each into (a)/(b)/(c)
+and views only the crops of `needs-review` findings.
 
 ## 6. Build-time geometry self-check (catch it before the gate)
 
 Before a build is handed to QA, render it headless at the frame's
 dimensions and assert: (a) rendered page size equals the frame, no scroll
-at load unless required; (b) every top-level section boundary lands within
-±2px of its y in the extraction. Record measured-vs-expected. The classic
+at load unless required; (b) every region in the extraction's
+`layout.json` lands within ±2px of its x/y/w/h. Record measured-vs-expected
+and write the figmaNode → selector map to `04-build/regions.json` so the
+accuracy and regression checks reuse it. `geometry-check.mjs <run-dir>
+--all` is that check as one command (it also drives states through
+`window.valPage.applyState`); never rebuild it probe by probe. The classic
 drift sources are the hairline trap accumulating at every bordered
 boundary and content-sized containers where the frame is fixed. Shipping
 unverified geometry cost one run its largest rework cycle (~500k tokens).
@@ -149,3 +169,37 @@ list, one rework, one re-verification. Dispatch an immediate rework only
 for failures that would corrupt the measurement (broken layout, console
 errors, wrong page dimensions). QA always re-runs after any build change —
 visual fixes are the classic way behaviours break.
+
+After a rework, **byte-diff the previous and new build captures before
+dispatching QA** (`regression-check.mjs --before … --after … --reference …
+--fixlist …`): changed pixels must lie inside the fix-list regions, and no
+fix region's mismatch against the reference may have grown. That check
+costs no model tokens and is the most conclusive evidence of what a rework
+touched; in one run it was the *last* thing measured, after a 73k-token QA
+re-run had already passed a build with a regressed icon. Fix lists name a
+`selectorScope` (the label span, not the button) and the `siblings` that
+must measure unchanged.
+
+## 8. Token discipline — what actually costs
+
+A 1.36M-token run was audited turn by turn. Weighted at relative prices it
+came to ~12.5M input-equivalent tokens, two-thirds of them cache **writes**:
+each agent's growing context re-cached on every turn. Two multipliers
+explain almost all of it, and neither is "a big file was read once":
+
+- **Images in context.** The Read tool renders a PNG into the model's
+  context, where it stays for every later turn. Three agents viewed the two
+  3840-px references (~600k characters each time); one viewed 19 crops. The
+  1x section crops the extraction had produced were never used. Rule: view
+  an image only when a numeric measurement cannot settle the question, and
+  then only a native-scale crop of the region in question.
+- **Turns × context.** The build agent ran 97 turns at ~140k context (13.4M
+  cache-read tokens) assembling its self-check probe by probe; accuracy ran
+  90 turns writing a grid-diff replica. Rule: after reading inputs, the
+  first artefact is the script; run it once; print ≤40 lines and write the
+  rest to files. Budgets are stated per agent and are real — "could not
+  verify X within budget" is a valid report; a silent skip is not.
+
+The cheapest measurements in that run were also the most conclusive: a
+byte-diff of two captures (62 px changed — exactly the icon's box) and a
+`getComputedStyle` read. Reach for those first.
