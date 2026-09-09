@@ -1,6 +1,6 @@
 {
   "name": "@valiify/val-core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Val — the shared agent pipeline for Valiify component libraries: Figma extraction, component mapping, build, QA and visual accuracy. Templates + tools + methodology; each library supplies a val/config.json.",
   "type": "module",
   "bin": {
