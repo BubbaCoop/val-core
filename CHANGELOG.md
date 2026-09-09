@@ -11,7 +11,13 @@ README "Releasing".
 
 ## [Unreleased]
 
-### Changed — templates and skills only (no tool, schema or bin changes)
+## [0.2.0] — 2026-09-08
+
+Minor, not patch: `input.frames[]` is a new manifest shape (additive —
+`input.frame` stays as a mirror of `frames[0]`, so 0.1.x runs and tools keep
+working), and there are new tools and an optional config key.
+
+### Changed — templates and skills
 
 Efficiency pass driven by the audit of run `2026-09-07-bsa-account-information`
 (1.36M harness tokens / 540 model turns; weighted ~12.5M input-equivalent,
@@ -133,6 +139,7 @@ resolve.
 - Tools: `grid-diff.mjs` (tested), `screenshot.mjs`, `generate-registry.mjs`.
 - Skills: `extract-methodology`, `visual-verification`, `component-mapping`.
 
-[Unreleased]: https://github.com/BubbaCoop/val-core/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/BubbaCoop/val-core/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BubbaCoop/val-core/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/BubbaCoop/val-core/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BubbaCoop/val-core/releases/tag/v0.1.0
