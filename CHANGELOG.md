@@ -30,6 +30,16 @@ saying so. `--package` hid the bug entirely by taking the bare-specifier branch 
   reports as `off (deliberate)` and is not conflated with a broken one.
 - A test audits a fixture library at a path containing a space.
 
+### Added — a release guard for the changelog cut
+
+0.4.0 shipped with its whole contents still under `[Unreleased]` and no `## [0.4.0]` heading.
+The README said to cut first, but as a comment inside a block of commands, and it was skipped;
+nothing failed because nothing was checking. `tools/changelog.test.mjs` now asserts that
+`CHANGELOG.md` carries a dated heading matching `package.json`'s version, that the newest
+heading *is* that version, that an `[Unreleased]` section stays open, and that every release
+heading is dated. Bumping without cutting now fails `npm test`, which is what CI runs, and the
+failure message names the rename to make.
+
 ## [0.4.0] — 2026-09-11
 
 ### Added — a human feedback channel for the design pipeline
