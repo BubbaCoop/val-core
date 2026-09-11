@@ -4,7 +4,8 @@
     "name": "shortapp",
     "displayName": "Short App",
     "figmaFileKey": "PA5pr1Q8KLfbjTxdAbFm0V",
-    "figmaFileName": "Updated-Short-App"
+    "figmaFileName": "Updated-Short-App",
+    "package": "@valiify/shortapp-ui"
   },
   "paths": {
     "designSystemSkill": ".claude/skills/valiify-shortapp-ui/SKILL.md",
@@ -20,16 +21,153 @@
     "buildThemeScript": "scripts/build-theme.mjs",
     "visualSpecsScript": "scripts/visual-specs.mjs",
     "componentProcessDoc": "docs/component-process.md",
-    "claudeMdSections": "Design Tokens + Quick Reference"
+    "claudeMdSections": "Design Tokens + Quick Reference",
+    "libraryRoot": "."
   },
   "typography": {
-    "fonts": ["@fontsource/inter"],
+    "fonts": [
+      "@fontsource/inter"
+    ],
     "systemNote": "the Short App type system is INTER-ONLY (all 24 text styles; there is no mono register in this design system)",
     "dataRule": "tabular-nums (the Short App system is Inter-only; no mono register exists — if the Figma appears to show a mono face, flag it as a design question rather than importing a font the token set doesn't define)"
   },
   "audience": "applicant-facing (the Short App application flow — fields, cards, actions) or portal/reviewer-facing (the Portal Specific set: StatusTracker, Action, UtilityButton). This selects which component families apply.",
   "pipelines": {
     "val": true,
-    "extract": true
+    "extract": true,
+    "design": true
+  },
+  "design": {
+    "methodologyDir": "design-methodology",
+    "surfaces": {
+      "short-app": {
+        "displayName": "Short App",
+        "methodology": "short-app.md",
+        "flows": [
+          "consumer",
+          "business",
+          "auto-loan"
+        ],
+        "viewports": [
+          {
+            "id": "web",
+            "note": "1920 canvas, 560 column (§1.1)"
+          },
+          {
+            "id": "mobile",
+            "note": "375, 343 column, sticky footer (§1.2)"
+          }
+        ],
+        "regions": [
+          "header",
+          "shell",
+          "title-block",
+          "content",
+          "field-group",
+          "conditional-reveal",
+          "roster",
+          "review-group",
+          "button-row",
+          "mobile-footer",
+          "instruction",
+          "disclaimer"
+        ],
+        "briefSchema": [
+          {
+            "heading": "Flow",
+            "hint": "consumer | business | auto-loan",
+            "required": true
+          },
+          {
+            "heading": "Step position",
+            "hint": "STEP n OF m · SECTION NAME (or \"unknown — asked\")",
+            "required": true
+          },
+          {
+            "heading": "User",
+            "hint": "who, in one sentence",
+            "required": true
+          },
+          {
+            "heading": "Job to be done",
+            "hint": "the applicant's goal on this step",
+            "required": true
+          },
+          {
+            "heading": "Entry point",
+            "hint": "which step / link leads here"
+          },
+          {
+            "heading": "Data displayed",
+            "hint": "| item | source |"
+          },
+          {
+            "heading": "Data collected",
+            "hint": "| field | type | required | format / placeholder | options source | — required-ness stated for EVERY field, including fields inside a conditional block",
+            "required": true
+          },
+          {
+            "heading": "Actions & consequences",
+            "hint": "| control | verb | result | destination |",
+            "required": true
+          },
+          {
+            "heading": "States",
+            "hint": "| state (empty / disabled / error / success / …) | trigger | what shows |",
+            "required": true
+          },
+          {
+            "heading": "Conditional logic",
+            "hint": "| trigger | exact boundary rule | what reveals | required-ness of the revealed fields | — \"less than 2 years\" needs its arithmetic, not its phrase",
+            "required": true
+          },
+          {
+            "heading": "Validation rules",
+            "hint": "| field | rule | message shown | when it fires | — every rule needs its message; a rule with no message is a copy gap",
+            "required": true
+          },
+          {
+            "heading": "Copy supplied",
+            "hint": "| id | role | text | — list EVERY role explicitly or mark it \"not supplied\": title · description · field labels · placeholders (per shaped field) · sub-section labels · help text · button labels · error messages · empty-state text · legal/consent",
+            "required": true
+          },
+          {
+            "heading": "Compliance / business constraints"
+          },
+          {
+            "heading": "Out of scope"
+          }
+        ],
+        "stopTriggers": [
+          {
+            "trigger": "archetype-not-in-§2",
+            "when": "the step is none of the eight §2 archetypes (a table, a dashboard tile, a file upload…)"
+          },
+          {
+            "trigger": "§9-forbidden",
+            "when": "a progress bar or back control in the header, a sidebar/rail/tab strip, NEXT, an asterisk for required, a second typeface or monospace, a gray disabled primary, an overlay for detail, a confirmation page (§7 hands off to the portal)"
+          },
+          {
+            "trigger": "§13-open-item",
+            "when": "loading state, conditional-reveal indent value, progress-bar track colour, roles-matrix label type, owner-row height on mobile"
+          },
+          {
+            "trigger": "brief-missing-field",
+            "when": "legal / consent copy is missing (never drafted)"
+          }
+        ],
+        "conceptSections": [
+          "Archetype — the §2 row and why",
+          "Step position + eyebrow text — STEP n OF m / SECTION",
+          "Mobile behaviour per §1.2 — what stacks, what stays three-up, the sticky footer"
+        ]
+      }
+    },
+    "output": {
+      "framework": "sveltekit",
+      "svelteMajor": "5",
+      "pagesDir": "src/routes",
+      "componentsDir": "src/lib/components"
+    }
   }
 }

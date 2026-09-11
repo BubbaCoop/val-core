@@ -47,6 +47,14 @@
         "figmaFileName": {
           "type": "string",
           "description": "Optional — the Figma file's title, for prose only."
+        },
+        "package": {
+          "type": "string",
+          "description": "The npm package name consumers install (e.g. @valiify/shortapp-ui). Used by the design pipeline for @import lines and node_modules paths.",
+          "examples": [
+            "@valiify/shortapp-ui",
+            "@valiify/dashboard-ui"
+          ]
         }
       }
     },
@@ -129,6 +137,15 @@
           "examples": [
             "val/qa-probes.mjs"
           ]
+        },
+        "libraryRoot": {
+          "type": "string",
+          "default": ".",
+          "description": "Where the library's CLAUDE.md, GETTING_STARTED.md and src/ live. \".\" in the library repo; node_modules/<package> in a consumer app.",
+          "examples": [
+            ".",
+            "node_modules/@valiify/shortapp-ui"
+          ]
         }
       }
     },
@@ -185,7 +202,7 @@
     "pipelines": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Which pipelines to generate. Both default to true.",
+      "description": "Which pipelines to generate. val and extract default to true; design defaults to false and needs a design.surfaces entry.",
       "properties": {
         "val": {
           "type": "boolean",
@@ -196,6 +213,165 @@
           "type": "boolean",
           "default": true,
           "description": "Component extraction: /extract + extract-* lanes."
+        },
+        "design": {
+          "type": "boolean",
+          "default": false,
+          "description": "Brief → concept → human gate → Svelte handoff: /design + design-* agents. Requires design.surfaces."
+        }
+      }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Design pipeline configuration. A surface is a page-composition methodology (e.g. Short App, Dashboard); one library may serve several.",
+      "properties": {
+        "methodologyDir": {
+          "type": "string",
+          "default": "design-methodology",
+          "description": "Directory holding the surface methodology files. In the library repo: design-methodology. In a consumer app: node_modules/<package>/design-methodology (the library ships the folder)."
+        },
+        "surfaces": {
+          "type": "object",
+          "description": "Map of surface id → surface. The /design command takes --surface <id>; with one entry it is the default.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "displayName",
+              "methodology"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "displayName": {
+                "type": "string",
+                "examples": [
+                  "Short App"
+                ]
+              },
+              "methodology": {
+                "type": "string",
+                "description": "Methodology file name inside methodologyDir. Its §10 'shipped but unused' line and §12 interim-class column are read by class-audit; its companion *-decisions.md is history and is never read.",
+                "examples": [
+                  "short-app.md"
+                ]
+              },
+              "flows": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Flow ids the brief may name.",
+                "examples": [
+                  [
+                    "consumer",
+                    "business",
+                    "auto-loan"
+                  ]
+                ]
+              },
+              "viewports": {
+                "type": "array",
+                "description": "Viewports a concept must draw — one <main data-concept data-viewport=id> each.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "regions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Region vocabulary for data-region on concept blocks (the surface's shell parts)."
+              },
+              "briefSchema": {
+                "type": "array",
+                "description": "01-brief.md body headings in order; required ones are stop triggers when the brief lacks them. The trailer (Source map, Open questions, Rules applied, Unsure) is always appended.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "heading"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "heading": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "stopTriggers": {
+                "type": "array",
+                "description": "Surface-specific BLOCKING stop triggers, in addition to the five generic ones.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "trigger",
+                    "when"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "trigger": {
+                      "type": "string"
+                    },
+                    "when": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "conceptSections": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Sections concept.md opens with, in order, before the generic ones."
+              }
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "framework": {
+              "type": "string",
+              "default": "sveltekit",
+              "description": "Handoff target framework."
+            },
+            "svelteMajor": {
+              "type": "string",
+              "default": "5",
+              "description": "Svelte major version the handoff targets (5 = runes)."
+            },
+            "pagesDir": {
+              "type": "string",
+              "default": "src/routes",
+              "description": "Where route files land inside the package."
+            },
+            "componentsDir": {
+              "type": "string",
+              "default": "src/lib/components",
+              "description": "Where composed components land inside the package."
+            }
+          }
         }
       }
     }

@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/BubbaCoop/val-core/tools/design/contract.schema.json",
+  "title": "Design handoff contract (05-package/contract.json)",
+  "description": "The machine-readable half of a design handoff package: what the page is, which concept block each component implements, the props a dev wires, the states that must be reachable, and the copy that must appear verbatim. handoff-check.mjs validates the package against this.",
+  "type": "object",
+  "required": ["route", "archetype", "blocks", "states", "actions", "copy"],
+  "additionalProperties": false,
+  "properties": {
+    "route": { "type": "string", "description": "The route the page lives at, e.g. /business/residential-details." },
+    "surface": { "type": "string" },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step-based surfaces only (the eyebrow's position).",
+      "properties": { "n": { "type": "integer" }, "m": { "type": "integer" }, "section": { "type": "string" } }
+    },
+    "archetype": { "type": "string", "description": "The methodology §2 archetype this page composes." },
+    "blocks": {
+      "type": "array",
+      "description": "One entry per concept block, same ids.",
+      "items": {
+        "type": "object",
+        "required": ["id", "file"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^b[0-9]+$" },
+          "region": { "type": "string" },
+          "component": { "type": "string", "description": "Component file name when the block is its own component." },
+          "file": { "type": "string", "description": "Package-relative file the block is implemented in." },
+          "classes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "type": { "type": "string" },
+          "format": { "type": "string" },
+          "required": { "type": "boolean" },
+          "placeholder": { "type": "string" },
+          "options": { "type": "string", "description": "Where the option list comes from." },
+          "bind": { "type": "string", "description": "The prop path the value binds to." }
+        }
+      }
+    },
+    "states": {
+      "type": "array",
+      "description": "Every state the concept's data-states declared. Each must be reachable from a prop.",
+      "items": {
+        "type": "object",
+        "required": ["id", "when", "blocks"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "when": { "type": "string", "description": "The prop expression that produces this state." },
+          "prop": { "type": "string", "description": "The prop that drives it, when `when` is not a bare prop name." },
+          "blocks": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "kind": { "type": "string", "description": "back | continue | confirm | card-advance | row | rail | utility — the methodology's action tier." },
+          "enabledWhen": { "type": "string" },
+          "emits": { "type": "string", "description": "The callback prop the host app receives." },
+          "record": { "type": "string", "description": "Toast / activity-log record the methodology requires." }
+        }
+      }
+    },
+    "copy": {
+      "type": "array",
+      "description": "Every copy string, verbatim. source=DRAFT means the architect wrote it under §8 and the reviewer approved it at the gate.",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "role": { "type": "string" },
+          "text": { "type": "string" },
+          "source": { "enum": ["brief", "DRAFT", "methodology"] },
+          "verbatimInMarkup": { "type": "boolean", "description": "false when a type-* utility supplies the casing, so the markup carries the sentence-case form." }
+        }
+      }
+    },
+    "icons": { "type": "array", "items": { "type": "string" }, "description": "Sprite symbol ids the page references, without the #." },
+    "planned": {
+      "type": "array",
+      "description": "Every methodology §12 interim class used, so the dev team knows what to swap when the library ships the addition.",
+      "items": {
+        "type": "object",
+        "required": ["class", "ref"],
+        "additionalProperties": false,
+        "properties": { "class": { "type": "string" }, "value": { "type": "string" }, "ref": { "type": "string" }, "blocks": { "type": "array", "items": { "type": "string" } } }
+      }
+    }
+  }
+}

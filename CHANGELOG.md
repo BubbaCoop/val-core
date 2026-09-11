@@ -11,6 +11,66 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-11
+
+Minor: a third pipeline (`design`), two new tools, a new skill, and new optional config keys.
+Nothing in the `val` or `extract` pipelines changed.
+
+### Added — the design pipeline
+
+`/design` turns an employee's business brief into a handoff-ready SvelteKit page built only from
+a component library and a surface methodology. The failure mode it exists to eliminate is invented
+style. Five agents, two commands, one human gate:
+
+`design-brief-intake` → `design-concept-architect` ⇄ `design-critic` → **human gate**
+(`/design build`) → `design-page-builder` ⇄ `design-handoff-verifier`.
+
+- **Generated like every other pipeline.** `pipelines.design` (default false) plus a `design`
+  config block: `methodologyDir`, and per surface `methodology`, `viewports`, `regions`,
+  `briefSchema`, `stopTriggers`, `conceptSections`. Rendered into each agent as a
+  "Surfaces configured for this library" block, so a surface is a parameter, not a fork.
+- **Nothing duplicates the methodology.** Planned values are read from its §12 interim-class
+  column, forbidden components from its §10 "shipped but unused" line, and the `font-mono`
+  companion rule from the theme's own "needs font-mono" comments.
+- **Five stop triggers**, all blocking: `no-component`, `brief-missing-field`,
+  `archetype-not-in-§2`, `§13-open-item`, `§9-forbidden`, plus each surface's own. The only
+  defaultable class is missing non-legal copy, drafted per §8 and marked DRAFT.
+- **The human gate is mechanical**: `/design build` seals a sha256 of the approved concept;
+  the builder refuses to run without a hash match, and Gate 4b refuses to re-seal while a build
+  is in flight.
+
+### Added — tools
+
+- `tools/design/class-audit.mjs` — positive-allowlist class audit. The consumer's Tailwind build
+  compiles the whole default palette, so "unknown class" catches nothing: a class is sanctioned
+  only if it is a library selector, an `@utility`, a token utility cited in the methodology or
+  CLAUDE.md, a fixed structural utility, a methodology-cited value, or a §12 interim class.
+  Reports the last as PLANNED. Advisory Tailwind compile pass via `__unstable__loadDesignSystem`.
+- `tools/design/handoff-check.mjs` — approval hash, Svelte compilation (runes), block coverage
+  and `data-class` subsets, `contract.json` against its schema, state reachability against the
+  props a package really destructures, verbatim copy reconciled **against the approved concept**,
+  sprite icons, required files, HANDOFF sections, and the shell/load-path rules.
+- `tools/design/contract.schema.json`, `tools/design/concept.css`.
+- `skills/design-methodology/SKILL.md` — library-independent: brief schema, concept contract,
+  stop triggers, planned values, class discipline, the consumer conventions, and the
+  HTML → Svelte 5 translation rules (**the library's CLAUDE.md HTML is authoritative markup**;
+  a component wraps it verbatim and adds behaviour only).
+
+### Changed
+
+- `bin/val-init.mjs` routes `design-*` templates on `pipelines.design`, renders the surface
+  block, and validates `additionalProperties` sub-schemas (needed for the surfaces map).
+- `svelte` is a runtime dependency — consumers run `handoff-check`.
+
+### Verified
+
+Two surfaces end to end, each from a business brief to a package that builds in a real SvelteKit
+consumer: Short App *Residential details* (30 blocks, 2 viewports) and Dashboard *KYB tab*
+(39 blocks). Ledgers in each run's `07-writeup.md`: 8 methodology gaps found and closed, 8 agent
+errors all caught before handoff, 15 brief gaps all asked rather than inferred, 0 unsanctioned
+classes in either package.
+
+
 ## [0.2.0] — 2026-09-08
 
 Minor, not patch: `input.frames[]` is a new manifest shape (additive —
