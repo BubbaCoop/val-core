@@ -199,15 +199,28 @@ committed, not released.
 Publishing is local — npm requires interactive 2FA for this account. CI
 (`.github/workflows/ci.yml`) verifies; it never publishes.
 
+**Step 1 — cut the changelog first.** Rename `## [Unreleased]` to
+`## [x.y.z] — YYYY-MM-DD` and open a fresh empty `## [Unreleased]` above it.
+Do this *before* `npm version`, not after: once the tag exists the release is
+published against a changelog that still calls the shipped work unreleased, and
+the next change lands on top of it. This was missed on 0.4.0 — the whole
+release sat under `[Unreleased]` with no `[0.4.0]` heading until the following
+batch noticed.
+
+**Step 2 — verify and publish.**
+
 ```sh
-# on a green main with a clean tree
-#   move CHANGELOG "[Unreleased]" -> "[x.y.z] — YYYY-MM-DD", then:
+# on a green main with a clean tree, changelog already cut
 git commit -am "Changelog x.y.z"
 npm test && npm run check && npm pack --dry-run   # what CI runs; no "npm warn" lines
 npm version patch|minor|major                     # bumps, commits, tags vx.y.z
 npm publish                                       # browser 2FA prompt
 git push origin main --follow-tags                # CI re-verifies; tag must match version
 ```
+
+A quick way to catch a missed cut: `grep -A2 '^## \[Unreleased\]' CHANGELOG.md`
+should show nothing but the next heading, and `CHANGELOG.md` should contain a
+`## [x.y.z]` line matching `package.json`'s version.
 
 Then finish the release in each consumer library, or its `val:check` CI
 gate goes red on the header change:
