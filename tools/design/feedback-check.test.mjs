@@ -73,8 +73,8 @@ test("feedback on a superseded concept is rejected, not silently applied", () =>
   );
   const r = run(dir);
   assert.equal(r.status, 1, r.out);
-  assert.match(r.out, /round targets concept\.v1\.html but is being checked against concept\.v2\.html/);
-  assert.match(r.out, /block ids are stable across versions/);
+  assert.match(r.out, /round pins concept\.v1\.html, but concept\.v2\.html already exists and no fix ledger records this round/);
+  assert.match(r.out, /Block ids are stable across versions/);
 });
 
 test("a Concept: pin that disagrees with an explicit --concept fails", () => {
@@ -84,7 +84,7 @@ test("a Concept: pin that disagrees with an explicit --concept fails", () => {
   );
   const r = run(dir, "--concept", "02-concept/concept.v1.html");
   assert.equal(r.status, 1, r.out);
-  assert.match(r.out, /round targets concept\.v2\.html but is being checked against concept\.v1\.html/);
+  assert.match(r.out, /round pins concept\.v2\.html but --concept names concept\.v1\.html/);
 });
 
 test("a malformed Concept: value fails", () => {
@@ -219,4 +219,56 @@ test("a missing feedback file exits non-zero with usage guidance", () => {
   const r = run(dir);
   assert.equal(r.status, 1, r.out);
   assert.match(r.out, /No 00-input\/feedback-<n>\.md found/);
+});
+
+// ---- post-hoc audit of a round that was already worked --------------------------------
+
+test("auditing a completed round passes: it is checked against the version its reviewer saw", () => {
+  // v1 reviewed, round worked, rework produced v2. b03 exists only in v1 — so resolving the
+  // target as "latest" would both fail the pin and mis-target the finding.
+  const v2 = CONCEPT.replace('data-block="b03"', 'data-block="b04"');
+  const dir = runDir(
+    { 1: fb("| H1 | b03 | blocking | §5 | first name should be a dropdown | map to .dropdown-field |\n", { concept: "concept.v1.html" }) },
+    { concepts: { 1: CONCEPT, 2: v2 } },
+  );
+  writeFileSync(
+    join(dir, "02-concept", "fix-ledger.md"),
+    "| finding id | block | change made | § |\n| H1 | b03 | mapped to .dropdown-field | §5 |\n",
+  );
+  const r = run(dir);
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /CONCEPT: concept\.v1\.html/, "checked against the pinned version, not the latest");
+  assert.match(r.out, /already worked/);
+  assert.match(r.out, /fix-ledger\.md records its findings/);
+});
+
+test("a superseded pin with a ledger that does not mention this round still fails", () => {
+  const v2 = CONCEPT.replace('data-block="b03"', 'data-block="b04"');
+  const dir = runDir(
+    { 2: fb("| H7 | b03 | blocking | §5 | never worked | fix it |\n", { concept: "concept.v1.html" }) },
+    { concepts: { 1: CONCEPT, 2: v2 } },
+  );
+  writeFileSync(
+    join(dir, "02-concept", "fix-ledger.md"),
+    "| finding id | block | change made | § |\n| F3 | b03 | critic finding, unrelated | §5 |\n",
+  );
+  const r = run(dir);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /no fix ledger records this round/);
+});
+
+test("a pin naming a concept version that does not exist fails", () => {
+  const dir = runDir({ 1: fb("| H1 | b03 | advisory | §8 | a | fix a |\n", { concept: "concept.v9.html" }) });
+  const r = run(dir);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /round pins concept\.v9\.html, which does not exist/);
+});
+
+test("the report records the pin, the latest, and whether the round was already applied", () => {
+  const dir = runDir({ 1: fb("| H1 | b03 | blocking | §5 | a | fix a |\n") });
+  assert.equal(run(dir, "--out", "json").status, 0);
+  const rep = JSON.parse(readFileSync(join(dir, "feedback-check.json"), "utf8"));
+  assert.equal(rep.pinnedConcept, "concept.v1.html");
+  assert.equal(rep.latestConcept, "concept.v1.html");
+  assert.equal(rep.alreadyApplied, false);
 });

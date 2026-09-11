@@ -48,18 +48,23 @@ heading, in that order, even when a section is empty ("none stated") —
 followed by the trailer sections from the skill's §6 (Source map, Open
 questions, Methodology rules applied, Unsure). Rules:
 
-1. RECORD, DO NOT DESIGN. Copy the brief's facts into the schema's rows.
+**`§` always means a section of the surface methodology file.** The rules below are B-rules,
+not methodology sections. Never write a `§` reference you have not seen as a heading in the
+methodology you read; a cited section that does not exist makes every later stage trust a rule
+nobody wrote.
+
+B1. RECORD, DO NOT DESIGN. Copy the brief's facts into the schema's rows.
    Quote the brief in the Source map for every row you fill. A row you
    cannot source is a question, not an inference.
-2. REQUIRED FIELDS are the ★ headings of the surface block's schema. Each
+B2. REQUIRED FIELDS are the ★ headings of the surface block's schema. Each
    one the brief lacks becomes a BLOCKING question with `TRIGGER:
    brief-missing-field`. Exception: if the brief names a page or step that
    the methodology's screen inventory (§0) already lists, record what the
    inventory states and cite it.
-2b. SURFACE STOPS: the surface block's stop triggers name the surface's own
+B3. SURFACE STOPS: the surface block's stop triggers name the surface's own
    blocking conditions (an unverified archetype, a held-out page…). Each is
    a BLOCKING question with the TRIGGER the block names.
-2c. IMPLIED ROUND-TRIPS — decide this the same way every time. A brief that
+B4. IMPLIED ROUND-TRIPS — decide this the same way every time. A brief that
    describes an action which must reach a server ("validates and saves",
    "submits", "checks availability") but names no state for the wait is NOT a
    judgement call, and it is NOT a missing-copy default. Resolve it in this
@@ -73,24 +78,24 @@ questions, Methodology rules applied, Unsure). Rules:
      c. Neither → **BLOCKING**, `TRIGGER: brief-missing-field`.
    The non-blocking default class is missing non-legal COPY only. A state is
    never drafted, however obvious the spinner seems.
-3. ARCHETYPE COLLISIONS: if the brief describes a step no §2 archetype
+B5. ARCHETYPE COLLISIONS: if the brief describes a step no §2 archetype
    covers (a table with sorting, a dashboard tile, a file upload…), raise
    `TRIGGER: archetype-not-in-§2` and quote the sentence. Do not propose a
    substitute archetype.
-4. FORBIDDEN ASKS: if the brief asks for anything §9 forbids (a progress bar
+B6. FORBIDDEN ASKS: if the brief asks for anything §9 forbids (a progress bar
    in the header, a sidebar, a NEXT button, an asterisk for required, a
    second typeface, a modal for consent…), raise `TRIGGER: §9-forbidden`
    with the §9 line it collides with. The employee decides; you never
    silently drop the ask.
-5. OPEN ITEMS: if the brief needs anything §13 lists as unspecified
+B7. OPEN ITEMS: if the brief needs anything §13 lists as unspecified
    (loading state, a progress-bar colour, roles-matrix type…), raise
    `TRIGGER: §13-open-item`.
-6. COPY: record supplied copy verbatim, including typos (note them in
+B8. COPY: record supplied copy verbatim, including typos (note them in
    Unsure). Record what is NOT supplied per role (title, description,
    labels, help, buttons, legal). Legal or consent text that is missing is
    BLOCKING; other missing copy is non-blocking and will be drafted by the
    architect as DRAFT.
-7. FLOW must be one of the surface's flows. A brief that fits none is a
+B9. FLOW must be one of the surface's flows. A brief that fits none is a
    BLOCKING question.
 
 Questions use the clarification format exactly (Q / TRIGGER / NEEDED-FOR /

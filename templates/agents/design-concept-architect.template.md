@@ -18,25 +18,25 @@ on rework passes, a critique file.
 
 ## Initial pass — read IN FULL, in order (READ THE FILES NOW, never from memory)
 
-1. manifest.json — the surface, its methodology path, the run slug.
-2. 01-brief.md.
-3. The surface methodology named in the manifest — the whole file. Its §12
+R1. manifest.json — the surface, its methodology path, the run slug.
+R2. 01-brief.md.
+R3. The surface methodology named in the manifest — the whole file. Its §12
    table's interim-class column is the ONE way to write each
    `[raw — planned, §12]` / `[planned variant, §12]` value — verbatim from
    that column, never a hex or a token name of your own; its §10 "shipped
    components that no in-scope frame uses" line is a forbidden list.
-3b. The surface block at the end of this file whose id matches
+R4. The surface block at the end of this file whose id matches
    manifest.surface — viewports (one `<main data-concept>` each), the region
    vocabulary (`data-region`), stop triggers, and the sections concept.md
    opens with.
-4. {{CORE_SKILLS_DIR}}/design-methodology/SKILL.md — §3 stop triggers, §5
+R5. {{CORE_SKILLS_DIR}}/design-methodology/SKILL.md — §3 stop triggers, §5
    copy, §7 the concept contract (the exact markup), §12 class discipline.
-5. {{DESIGN_SYSTEM_SKILL_PATH}} — the compact class map.
-6. For every component you map: its `#### <Component>` section in
+R6. {{DESIGN_SYSTEM_SKILL_PATH}} — the compact class map.
+R7. For every component you map: its `#### <Component>` section in
    {{LIBRARY_ROOT}}/CLAUDE.md (Grep the heading, Read that range — never the
    whole file) and its source `{{COMPONENTS_DIR}}/<name>.css` (the selectors
    are the class API; the header lists which states exist).
-7. {{TOKEN_SOURCE}} — Grep `--color-|--text-|--radius-|@utility` to confirm
+R8. {{TOKEN_SOURCE}} — Grep `--color-|--text-|--radius-|@utility` to confirm
    every token utility you name exists. `{{LIBRARY_ROOT}}/src/utilities/`.
 
 Never Read an image, never open Figma, never read `*-decisions.md`,
@@ -46,14 +46,21 @@ coincidence, not a licence.
 
 ## Method
 
-1. ARCHETYPE. Pick exactly one §2 archetype for the brief and record the
+**`§` always means a section of the surface methodology file, and nothing else.** The steps
+below are M-steps and the read list above is R-steps; neither is a methodology section. Before
+you write a `§` reference into `data-methodology`, concept.md or a question, confirm that
+section exists in the methodology you read — a heading you can point at. §4 has no lettered
+subsections unless the file shows them. Citing a § that does not exist makes every downstream
+check trust a rule nobody wrote.
+
+M1. ARCHETYPE. Pick exactly one §2 archetype for the brief and record the
    row. If no row fits → `TRIGGER: archetype-not-in-§2`, stop.
-2. SHELL. Compose the step per §1 (web) and §1.2 (mobile): header, title
+M2. SHELL. Compose the step per §1 (web) and §1.2 (mobile): header, title
    block per §3 (eyebrow `STEP n OF m / SECTION` from the brief, title,
    description), content block, commit row per the §2 table (which buttons,
    disabled-until-valid per §6). Both viewports are mandatory — one
    `<main data-concept data-viewport="web">` and one `…="mobile">`.
-3. BLOCKS. Break the content into blocks, one per pattern. For each, in this
+M3. BLOCKS. Break the content into blocks, one per pattern. For each, in this
    order: §5 says which pattern answers this kind of question → §10 gives the
    class (list every class the block uses, component classes with a leading
    dot) → if §10 has no entry, §11 gives a utility composition (list its
@@ -62,33 +69,42 @@ coincidence, not a licence.
    methodology does not compose; never borrow a component the methodology
    says no frame uses (§10's "shipped but unused" list) without a § that
    sanctions it.
-4. STATES. From §6 and the brief's States section: which blocks change, and
+M4. STATES. From §6 and the brief's States section: which blocks change, and
    how, using only states the component's CSS models (rest / hover / focus /
    selected / invalid / disabled as the source says). A state the brief names
    and no component models → `TRIGGER: no-component` (state variant).
    A state §13 leaves open → `TRIGGER: §13-open-item`. Where §6 composes a
    state from library parts (a loading skeleton row, a failed-module alert),
    compose it exactly there — inside the shell, never as a separate page.
-4b. PLANNED VALUES. A `[raw — planned, §12]` or `[planned variant, §12]`
+M5. PLANNED VALUES. A `[raw — planned, §12]` or `[planned variant, §12]`
    value is written ONLY as §12's interim class for it, and every use is
    listed in concept.md's "Planned values used" table (block · value · class ·
    §12 row) so the build can carry it into HANDOFF.md.
-4c. ONLY WHAT THE BRIEF ASKED FOR. A shell part the methodology permits
+M6. ONLY WHAT THE BRIEF ASKED FOR. A shell part the methodology permits
    (a sub-toolbar, a re-run action, a filter row, an add affordance) appears
    only when the brief supplies its content. Never add an action, filter or
    control the brief did not ask for, however natural the shell makes it.
-4d. COMPONENTS ARE USED WHOLE, PARTS MAY BE OMITTED. When the brief forbids
+M7. COMPONENTS ARE USED WHOLE, PARTS MAY BE OMITTED. When the brief forbids
    what a component's optional part does (a reveal toggle on a value that
    must never be shown), keep the component, omit the part, and record it in
    Unsure so HANDOFF.md carries it — never hand-compose a substitute. If the
    component cannot render without that part, that is a `no-component`
    stop.
-5. COPY. Supplied copy verbatim (typos noted in Unsure). Missing copy
+M7b. CONFLICTS GO IN UNSURE, ALWAYS. Where a brief value disagrees with something the
+   methodology evidences — a placeholder whose mask differs from the frames, a width, a
+   label form, an order — you may follow the brief, but you may NEVER record the result as
+   compliant. Write the conflict in Unsure: the brief's value, the methodology's evidenced
+   value, the § that carries it, and which one you used. "Both are fine" is not a finding
+   you are entitled to make; the reviewer decides at the gate, and they can only decide
+   what they can see. A conflict silently resolved is indistinguishable from a conflict
+   nobody noticed.
+
+M8. COPY. Supplied copy verbatim (typos noted in Unsure). Missing copy
    drafted per §8 — sentence case, second person, the why in one sentence,
    format placeholders, uppercase only via the type-* utility — and marked
    DRAFT in the copy table and with `data-copy-source="DRAFT"` in the
    concept. Legal/consent copy is never drafted (BLOCKING question).
-5b. A COPY ELEMENT CONTAINS THE COPY AND NOTHING ELSE. An element carrying
+M9. A COPY ELEMENT CONTAINS THE COPY AND NOTHING ELSE. An element carrying
    `data-copy-id` holds exactly the string that copy id names — no
    parenthetical, no "(3 of 5)", no field list, no note about behaviour, no
    restatement of the spec. Describe the block in its `data-label` text or in
@@ -97,7 +113,7 @@ coincidence, not a licence.
    forced to annotate `verbatimInMarkup: false` for a reason that is an
    authoring slip rather than a real casing-utility case — which is the only
    thing that flag is for.
-6. FORBIDDEN. Walk §9.2 and §9.3 against your concept before writing. A
+M10. FORBIDDEN. Walk §9.2 and §9.3 against your concept before writing. A
    collision with the brief's ask → `TRIGGER: §9-forbidden`, stop; a
    collision you introduced → fix it.
 
@@ -120,6 +136,11 @@ inventory, rail contents, step position…), then always: Hierarchy rationale
 (§3) · Mapping table `| block | region | pattern | §10 class or §11 recipe |
 content | states |` · Copy table `| id | role | text | source | §8 rule |` ·
 Planned values used `| block | value | class | §12 row |` (or "none") ·
+**Class-bag convention** — one line stating how the per-viewport bags relate: which blocks
+carry `md:`-prefixed classes in which viewport's drawing, and that the bags are per-viewport
+rather than cumulative. The build merges two drawings into one responsive artifact and has to
+know which spellings were deliberate; without this line it infers, and an inferred breakpoint
+is a silent deviation ·
 Open questions (clarification format with TRIGGER) · Methodology rules
 applied · Unsure.
 

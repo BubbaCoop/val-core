@@ -90,12 +90,32 @@ if (!feedbackRel) {
 const feedbackPath = join(runPath, feedbackRel);
 
 const latestConcept = latest(join(runPath, "02-concept"), /^concept\.v(\d+)\.html$/);
+
+// The pin is read before the concept is chosen: a round is always about the version the
+// reviewer saw, so that is what its targets are checked against. Choosing "latest" instead
+// made every post-hoc audit of a completed round fail, because the rework it caused had
+// already produced a newer version.
+const bodyForPin = existsSync(feedbackPath) ? readFileSync(feedbackPath, "utf8") : "";
+const pinMatch = /^[ \t]*concept[ \t]*:[ \t]*(\S+)[ \t]*$/im.exec(bodyForPin);
+const pinned = pinMatch ? basename(pinMatch[1]) : null;
+const pinnedExists = pinned && existsSync(join(runPath, "02-concept", pinned));
+
 let conceptRel = opts.concept;
 if (!conceptRel) {
-  if (!latestConcept) fail("No 02-concept/concept.v<n>.html found (and --concept not given).");
-  conceptRel = join("02-concept", latestConcept.name);
+  if (pinnedExists) conceptRel = join("02-concept", pinned);
+  else if (latestConcept) conceptRel = join("02-concept", latestConcept.name);
+  else fail("No 02-concept/concept.v<n>.html found (and --concept not given).");
 }
 const conceptPath = join(runPath, conceptRel);
+
+/** Did a rework already consume this round? The ledger names the findings it answered. */
+function roundAlreadyApplied() {
+  const ledger = join(runPath, "02-concept", "fix-ledger.md");
+  if (!existsSync(ledger)) return false;
+  const text = readFileSync(ledger, "utf8");
+  const ids = [...bodyForPin.matchAll(/^\s*\|\s*(H\d+)\s*\|/gim)].map((m) => m[1]);
+  return ids.length > 0 && ids.some((id) => new RegExp(`\\b${id}\\b`).test(text));
+}
 
 // ---- file ----------------------------------------------------------------------------
 
@@ -112,31 +132,36 @@ if (!existsSync(feedbackPath)) {
 
 // ---- version (the concept this round pins itself to) --------------------------------
 
-/** `Concept: concept.v2.html` — the version the reviewer actually looked at. */
-const pinMatch = /^[ \t]*concept[ \t]*:[ \t]*(\S+)[ \t]*$/im.exec(body);
-const pinned = pinMatch ? basename(pinMatch[1]) : null;
-
+let applied = false;
 if (body.trim()) {
   if (!pinned) {
     fatal(
       "version",
       "no `Concept:` line — the round does not say which concept version it targets",
-      "add `Concept: concept.v<n>.html`; without it a stale round cannot be distinguished from a current one",
+      "add `Concept: concept.v<n>.html`; without it a stale round cannot be told apart from a current one",
     );
   } else if (!/^concept\.v\d+\.html$/.test(pinned)) {
     fatal("version", `\`Concept: ${pinned}\` is not a concept.v<n>.html file name`);
+  } else if (!pinnedExists) {
+    fatal("version", `round pins ${pinned}, which does not exist in 02-concept/`);
   } else if (pinned !== basename(conceptRel)) {
+    // Only reachable via an explicit --concept that disagrees with the pin.
     fatal(
       "version",
-      `round targets ${pinned} but is being checked against ${basename(conceptRel)}`,
-      "re-post the human gate against the current concept and collect the feedback again — block ids are stable across versions, so applying this round would land it on the wrong one silently",
+      `round pins ${pinned} but --concept names ${basename(conceptRel)}`,
+      "a round is checked against the version its reviewer saw; drop --concept, or fix the pin",
     );
   } else if (latestConcept && pinned !== latestConcept.name) {
-    fatal(
-      "version",
-      `round targets ${pinned}, but ${latestConcept.name} is the current version`,
-      "the reviewer commented on a superseded concept; re-post the gate against the current one rather than reinterpreting their findings",
-    );
+    // The pinned version is superseded. That is expected once the round has been worked —
+    // the rework is what produced the newer version — and a defect if it has not been.
+    applied = roundAlreadyApplied();
+    if (!applied) {
+      fatal(
+        "version",
+        `round pins ${pinned}, but ${latestConcept.name} already exists and no fix ledger records this round`,
+        "the reviewer commented on a version that was superseded before their findings were worked. Block ids are stable across versions, so applying the round now would silently attach it to the wrong drawing: re-post the gate against the current concept instead of reinterpreting their findings.",
+      );
+    }
   }
 }
 
@@ -246,6 +271,7 @@ const report = {
   concept: conceptRel,
   pinnedConcept: pinned,
   latestConcept: latestConcept ? latestConcept.name : null,
+  alreadyApplied: applied,
   round,
   verdict: fails.length ? "FAIL" : "PASS",
   counts: { findings: rows.length, blocking: blocking.length, advisory: advisory.length },
@@ -272,6 +298,9 @@ const lines = [
 ];
 for (const f of [...fails, ...warns]) {
   lines.push(`  ${f.severity === "fail" ? "FAIL" : "warn"}  ${f.check.padEnd(9)} ${f.message}${f.detail ? `\n        ${f.detail}` : ""}`);
+}
+if (applied) {
+  lines.push(`  note: this round was already worked — ${pinned} is superseded by ${latestConcept.name}, and 02-concept/fix-ledger.md records its findings. Checked against ${pinned}, the version its reviewer saw.`);
 }
 if (report.written) lines.push(`  report: ${report.written}`);
 else if (report.notWritten) lines.push(`  report not written: ${report.notWritten}`);

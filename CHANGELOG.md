@@ -99,6 +99,47 @@ blocked brief). Everything below is a defect that only a real run could surface.
   writes are blocked and the stages degrade into drafting prose into a plan file — gates
   appear to pass and nothing lands on disk. Gate 0 now stops with a message instead.
 
+### Fixed — from the second end-to-end run (driven from the library repo)
+
+The first run was driven from val-core using val-core's own generated agents. Re-running it
+from a session rooted in the library repo — the way it is meant to be used — exercised the
+feedback channel end to end (Gate 4a, a pinned round, `loops.feedback` 1 / `loops.critic` 0)
+and surfaced seven more defects.
+
+- **Gate 0 checks its own provenance.** It now verifies the run directory is inside the
+  session's working directory, and that the generated agents' `library:` header matches
+  `library.name` in `val/config.json`. Driving a run in one repo with another repo's agents
+  produces output that looks right and was composed against the wrong library's class map,
+  methodology and package — which is exactly how the first run was driven.
+- **Clarification questions are relayed verbatim in their six-line shape.** A Gate 1 stop was
+  relayed as prose with a "96% complete" summary and a checkmark inventory. That reads as a
+  status report and invites a yes/no, the six lines exist because each is a separate thing the
+  requester must see, and a machine parses them. Progress framing is now explicitly forbidden.
+- **Instruction labels can no longer be mistaken for methodology sections.** The architect
+  cited `§4c` and `§4d` in both runs — sections no methodology has. The cause was in the
+  template: its own Method steps were labelled `4.`, `4b.`, `4c.`, `4d.`, so the agent read its
+  instruction labels as § references. Method steps are now `M1…`, the read list `R1…`, intake's
+  rules `B1…`, and both agents carry an explicit rule that `§` means the methodology file and a
+  cited section must exist. A test rejects any template step labelled like `4c.`.
+- **A brief that conflicts with the methodology always lands in Unsure.** A placeholder mask
+  disagreeing with the frames' evidenced value was asserted compliant in concept.md instead of
+  surfaced. The architect may follow the brief, but never record the result as compliant: the
+  conflict, both values, the § and the choice go in Unsure. A conflict silently resolved is
+  indistinguishable from one nobody noticed.
+- **concept.md states the class-bag convention.** One required line saying which blocks carry
+  `md:`-prefixed classes in which viewport's drawing, and that the bags are per-viewport rather
+  than cumulative. The build merges two drawings into one responsive artifact; without the line
+  it infers, and an inferred breakpoint is a silent deviation.
+- **`feedback-check` resolves the concept from the pin, not from "latest".** Auditing a
+  completed round always failed the version check, because the rework it caused had already
+  produced a newer version. A round is now checked against the version its reviewer saw. A
+  superseded pin is still a failure *unless* `02-concept/fix-ledger.md` records that round's
+  findings — real evidence the round was worked, which distinguishes a post-hoc audit from a
+  reviewer commenting on a drawing that had already moved. The stale-pin message was reworded.
+- **The manifest records the model on every gate.** A single top-level field states an
+  intention; a per-gate field is what proves no stage silently ran on another model — which has
+  already happened once. A gate whose model differs from the run's is a finding for the writeup.
+
 ### Fixed — a check no longer writes into a tree it is only inspecting
 
 `class-audit` and `handoff-check` wrote their JSON report beside the target unconditionally.
