@@ -11,6 +11,51 @@ README "Releasing".
 
 ## [Unreleased]
 
+### Added — a human feedback channel for the design pipeline
+
+The pipeline had two machine inputs to a concept rework (the critic's findings) and no
+human one. A reviewer at the gate could only reply in chat, which the orchestrator handled
+as "a reply with changes re-enters Gate 2 with their notes as the fix list" — an instruction
+with no file, no schema and no loop accounting. A reviewer's ask therefore lived only in the
+session that heard it, and nothing could be built against it.
+
+- **`00-input/feedback-<n>.md`** — the reviewer's changes as a file, in the *same* table the
+  critic uses (`| id | block | severity | rule | finding | fix |`) so one rework path serves
+  both sources. Ids are `H1, H2 …` against the critic's `F1, F2 …`, and the prefix carries
+  into `fix-ledger.md` so the origin of every change stays visible. `rule` may be empty — a
+  reviewer need not cite a §.
+- **A required `Concept: concept.v<n>.html` pin** at the top of the file, naming the version
+  the reviewer actually reviewed. Block ids are stable across versions, so without it a round
+  collected on v2 applies cleanly to v3 and the substitution is invisible. The check rejects a
+  superseded round and the answer is to re-post the gate, never to reinterpret the findings.
+- **A `ROUTE:` line on a refusal.** When a finding asks for what the methodology forbids or
+  does not determine, the architect returns the §3 clarification shape with an added `ROUTE:`
+  naming what would make the ask legal — a §12 planned addition with an interim class, or a
+  §13 open item — and stating that the edit belongs in the methodology file and git, not the
+  feedback channel. The orchestrator relays it verbatim. A reviewer is owed the route, never a
+  bare refusal.
+- **`tools/design/feedback-check.mjs`** — validates a round before the architect is
+  dispatched: ids, severities, a non-empty `fix`, and that every target actually exists in the
+  concept version it claims to address. That last check is the load-bearing one: findings are
+  composed against a rendered concept, so a stale block id means the feedback points at a
+  version that no longer exists and would otherwise be silently skipped. `--out json` writes
+  the parsed rows for a host to consume.
+- **`/design` Gate 4a** — validate, increment `loops.feedback`, re-invoke the architect in
+  REWORK MODE, then return to Gate 3. Human feedback never bypasses the critic.
+- **`loops.feedback` in `manifest.json`, uncapped and separate from `loops.critic`.** A
+  reviewer iterating is the product working as intended; a critic that cannot converge within
+  3 passes is a defect. Counting them together would have capped the reviewer at three rounds
+  for a reason that has nothing to do with them.
+- **The methodology still wins.** A feedback finding that asks for what the methodology forbids
+  or does not determine is a stop trigger, not a rework — the reviewer chooses between dropping
+  the ask and recording a deliberate exception the writeup carries. Approval does not authorise
+  an invented class.
+
+Config: none. Existing runs and manifests are unaffected; `loops.feedback` is additive.
+
+**Not yet exercised by a real run.** The design pipeline itself has never been driven
+end-to-end; this ships in the same batch as whatever that first run surfaces.
+
 ## [0.3.0] — 2026-09-11
 
 Minor: a third pipeline (`design`), two new tools, a new skill, and new optional config keys.

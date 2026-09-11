@@ -43,7 +43,7 @@ Methodology files live under `{{DESIGN_METHODOLOGY_DIR}}/`. Their companion
    { "kind": "design", "runId", "library": "{{LIBRARY_NAME}}",
      "surface": "<id>", "methodology": "{{DESIGN_METHODOLOGY_DIR}}/<file>",
      "output": "{{DESIGN_OUTPUT_FRAMEWORK}}",
-     "gates": [], "loops": { "critic": 0, "verify": 0 },
+     "gates": [], "loops": { "critic": 0, "verify": 0, "feedback": 0 },
      "approval": null, "status": "running" }
 4. Confirm the design-* agents are registered in this session (they appear
    as subagent types). If they are missing, STOP and tell the requester to
@@ -82,10 +82,66 @@ Invoke `design-critic` with the run directory and the concept version.
 Post to the reviewer, in one message: the path to the latest
 `concept.v<n>.html`, the full contents of `concept.md`, the DRAFT-copy list
 (every copy row with `source: DRAFT`), and the Unsure sections. Then say
-plainly: nothing is built until they run `/design build <run-dir>`, and
-that a reply with changes re-enters Gate 2 with their notes as the fix
-list. Set manifest status `awaiting-approval`. END YOUR TURN. Do not write
-04-approval.md — that file is written only by `/design build`.
+plainly: nothing is built until they run `/design build <run-dir>`, and that
+changes instead re-enter Gate 2 by way of Gate 4a. Set manifest status
+`awaiting-approval`. END YOUR TURN. Do not write 04-approval.md — that file
+is written only by `/design build`.
+
+### Gate 4a — a feedback round (the reviewer asks for changes)
+
+The reviewer's changes become a file, never a chat aside that only this
+session remembers. Write `00-input/feedback-<n>.md`, n = `loops.feedback` + 1:
+
+    # Feedback <n>
+    Concept: concept.v<n>.html
+
+    | id | block | severity | rule | finding | fix |
+    | H1 | b03 | blocking | §5 | first name should be a dropdown | map to .dropdown-field |
+
+The `Concept:` line **pins the version the reviewer actually looked at** and is
+required. Block ids are stable across versions, so without the pin a round
+collected on v2 would apply cleanly to v3 and nobody would notice; with it,
+`feedback-check` rejects the round and the answer is to re-post the gate
+against the current concept, not to reinterpret their findings.
+
+The table is the same shape the critic uses, with ids `H1, H2 …` so the ledger
+records that a human asked rather than the critic. `block` names a `data-block`
+or a copy id from the pinned concept, or `-` for the page as a whole;
+`severity` is `blocking` or `advisory`; `rule` may be empty (a reviewer need
+not cite a §); `fix` must say what to do. You translate their prose into that
+table, verbatim where they were specific — never summarised into a different
+ask, and never expanded into one they did not make.
+
+1. Validate it — this costs no model tokens:
+   `node {{TOOLS_DIR}}/design/feedback-check.mjs <run-dir> --out json`
+   Never dispatch a round the tool rejects. A stale block id means they
+   reviewed an older version: re-post Gate 4 against the current one rather
+   than guessing which block they meant.
+2. Increment `loops.feedback`; append a gate record naming the feedback file.
+3. Re-invoke `design-concept-architect` in REWORK MODE, naming
+   `00-input/feedback-<n>.md` as the fix list.
+4. Return to **Gate 3**. The critic reviews the new version like any other —
+   human feedback never bypasses it — and `loops.critic` restarts at 0 for
+   that version.
+5. Then Gate 4 again, with the new concept.
+
+**`loops.feedback` is uncapped and is never counted against `loops.critic`.**
+A reviewer iterating is the product working as intended; a critic that cannot
+converge within 3 passes is a defect. Counting them together would cap the
+reviewer at three rounds for a reason that has nothing to do with them.
+
+A feedback finding that asks for something the methodology forbids or does not
+determine is the **Clarification protocol**, not a rework. The architect returns
+it BLOCKED with a `ROUTE:` line naming the methodology change that would make
+the ask legal — a `§12` planned addition with an interim class, or a `§13` open
+item — and stating that the edit is made in the methodology file and committed
+to git, not through the feedback channel.
+
+**Relay that question verbatim, `ROUTE:` line included.** The reviewer is owed
+the route, not a refusal: they are choosing between dropping the ask, accepting
+a composition the methodology does determine, and changing the methodology
+first and re-running. Never let a request become a silent compromise —
+approval does not authorise an invented class, and neither does insistence.
 
 ## `/design build <run-dir>` — the reviewer's approval to package
 

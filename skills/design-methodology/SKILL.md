@@ -21,7 +21,9 @@ determine something, the agent stops and asks; it never fills the gap.
 
 Pipeline: `design-brief-intake` → `design-concept-architect` ⇄
 `design-critic` → **human gate** (`/design build`) → `design-page-builder` ⇄
-`design-handoff-verifier`. The orchestrator is `/design`.
+`design-handoff-verifier`. The orchestrator is `/design`. At the human gate a
+reviewer may instead send changes back as `00-input/feedback-<n>.md` (§8b),
+which re-enters the architect ⇄ critic loop and is uncapped.
 
 ## 1. Reading a surface methodology
 
@@ -264,6 +266,36 @@ CRITIQUE: FAIL | FINDINGS: 3 | BLOCKING: 2
 
 PASS requires zero blocking findings and no open stop-trigger questions.
 Checklist A–G is in the critic's agent file.
+
+### 8b. Human feedback (`00-input/feedback-<n>.md`)
+
+The reviewer at the human gate uses the **same table** as the critic, so one
+rework path serves both: `| id | block | severity | rule | finding | fix |`,
+ids `H1, H2 …` (the critic's are `F1, F2 …`). `block` is a `data-block` or copy
+id from the concept reviewed, or `-` for the whole page; `rule` may be empty,
+since a reviewer need not cite a §; `fix` must say what to do.
+
+The file opens with a required `Concept: concept.v<n>.html` line **pinning the
+version the reviewer looked at**. Block ids are stable across versions, so
+without the pin a round collected on v2 applies cleanly to v3 and the
+substitution is invisible; with it the round is rejected and the gate is
+re-posted against the current concept.
+
+`tools/design/feedback-check.mjs` validates the file before the architect is
+dispatched: the pin (present, well-formed, and current), ids, severities, a
+non-empty fix, and that every target exists in the pinned concept.
+
+Feedback rounds are counted in `manifest.loops.feedback`, **uncapped and
+separate from `loops.critic`**: a reviewer iterating is the product working, a
+critic failing to converge in 3 passes is a defect. A round re-enters Gate 2
+and is then critiqued like any other version, so feedback never bypasses the
+critic. A finding that asks for what the methodology forbids or does not
+determine is a stop trigger, not a rework — approval does not authorise
+invented style. Such a finding comes back in the §3 clarification shape with an
+added `ROUTE:` line naming what would make the ask legal (a §12 planned
+addition with an interim class, or a §13 open item) and stating that the edit
+belongs in the methodology file and git, not the feedback channel. The reviewer
+is owed the route, never a bare refusal.
 
 ## 9. The package contract
 

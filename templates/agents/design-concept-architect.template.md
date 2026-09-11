@@ -122,15 +122,52 @@ is a `no-component` question. Fix and re-run; do not finish on FAIL.
 
 ## Rework passes
 
-You receive 03-critique-<n>.md. Read ONLY: the critique, your previous
-concept.v<n-1>.html and concept.md, and the specific methodology §s and
-component files the findings cite. Not the brief again, not the whole
-methodology, no images. Write concept.v<n>.html (block ids unchanged; a
-removed block is listed in the ledger, never renumbered), update concept.md,
-and write `02-concept/fix-ledger.md`: `| finding id | block | change made |
-§ |`, one row per finding — including "no change — disputed because <§>"
-where you disagree; the critic adjudicates. Re-run class-audit. Rework
-budget: 8 tool uses.
+You receive a fix list: either `03-critique-<n>.md` from the critic, or
+`00-input/feedback-<n>.md` from the human reviewer at the gate. Both carry the
+same table — `| id | block | severity | rule | finding | fix |` — and you
+handle them identically. Only the id prefix differs (`F` critic, `H` human);
+carry it into the ledger so the origin of every change stays visible.
+
+A human finding may cite no § — the reviewer is not required to know the
+methodology. It is still bound by it. If a requested change would violate the
+methodology, use a component §10 forbids, or need a value §13 leaves open, do
+NOT make it. **A reviewer cannot authorise an invented class**, and a request
+is not a §.
+
+**Refusing is not an answer on its own — name the route.** Report the finding
+BLOCKED in the same clarification shape a brief stop trigger uses, plus one
+extra line:
+
+    Q: <what the reviewer must decide, answerable in one message>
+    TRIGGER: no-component | §9-forbidden | §13-open-item | archetype-not-in-§2
+    NEEDED-FOR: H<n> — <the reviewer's ask, in their own words>
+    CHECKED: <the §s and component files you read before refusing>
+    COST-OF-GUESSING: <what composing it anyway would break>
+    ROUTE: <the methodology change that would make the ask legal, named as a
+      file and a section — `<methodology file>` §12 "Planned library
+      additions" (with an interim class) for a value the library has not
+      shipped yet, or `<methodology file>` §13 "Open items" for something
+      genuinely undecided. That edit is made in the methodology file and
+      committed to git. It cannot be made through the feedback channel, and
+      this pipeline will not make it on the reviewer's behalf.>
+    ACCEPTABLE-ANSWER: drop the ask · accept a §10/§11 composition that IS
+      determined (name it) · change the methodology first, then re-run
+
+Pick the route that actually fits: **§12** when the library will ship the thing
+and an interim class can carry it meanwhile; **§13** when nobody has decided
+yet. If neither fits because the ask is simply forbidden, name the §9 row — the
+route there is a deliberate methodology exception that the writeup records, and
+the reviewer chooses it explicitly or drops the ask. Never a silent compromise.
+
+Read ONLY: the fix list, your previous concept.v<n-1>.html and concept.md, and
+the specific methodology §s and component files the findings cite. Not the
+brief again, not the whole methodology, no images. Write concept.v<n>.html
+(block ids unchanged; a removed block is listed in the ledger, never
+renumbered), update concept.md, and write `02-concept/fix-ledger.md`:
+`| finding id | block | change made | § |`, one row per finding — including
+"no change — disputed because <§>" where you disagree. The critic adjudicates
+a disputed `F`; a disputed `H` goes back to the reviewer at the gate. Re-run
+class-audit. Rework budget: 8 tool uses.
 
 ## Budgets and stopping
 
