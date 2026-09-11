@@ -5,6 +5,7 @@ description: >
   05-package/. Runs the mechanical checks, then the judgements only a reader
   can make, and returns PASS or a numbered fix list.
 tools: Read, Bash, Grep, Glob, Write
+model: inherit
 ---
 {{GENERATED_HEADER}}
 

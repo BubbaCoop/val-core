@@ -261,3 +261,73 @@ test("stylesheets inside the package are violations", () => {
   assert.equal(r.status, 1);
   assert.match(r.stdout, /stylesheet in the package/);
 });
+
+// ---- §12 format contract -------------------------------------------------------------
+
+const PAGE_OK = `<div class="w-140 mx-auto py-12 flex flex-col gap-10"><button class="btn btn-primary">x</button></div>`;
+
+/** Replace the fixture methodology, keeping the §1 lines the other tests rely on. */
+function withSection12(lib, section12) {
+  const base = readFileSync(join(lib, "short-app.md"), "utf8");
+  writeFileSync(join(lib, "short-app.md"), `${base}\n\n${section12}\n\n## 13. Open items\n- nothing\n`);
+}
+
+test("§12 with no interim/class column warns — the planned set silently resolved empty", () => {
+  const { lib, pkg } = setup();
+  withSection12(
+    lib,
+    `## 12. Planned library additions
+
+| Addition | Spec from the frames | Library home |
+|---|---|---|
+| Mobile sticky action bar | 76 tall, sticky bottom | new component |
+| TextField optional slot | title-row marker | modifier |`,
+  );
+  writeFileSync(join(pkg, "Page.svelte"), PAGE_OK);
+  const r = run(pkg, lib);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /CLASS-AUDIT: PASS/, "a format gap is reported, never a failure");
+  assert.match(r.stdout, /§12 GAP/);
+  assert.match(r.stdout, /lists 2 planned addition\(s\) but its table has no interim\/class column/);
+  assert.match(r.stdout, /headers: Addition \| Spec from the frames \| Library home/);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.match(report.rules.plannedDiagnostic, /no interim\/class column/);
+});
+
+test("§12 with an interim class column resolves PLANNED and warns about nothing", () => {
+  const { lib, pkg } = setup();
+  withSection12(
+    lib,
+    `## 12. Planned library additions
+
+| Addition | Value | Interim class |
+|---|---|---|
+| Mobile sticky action bar | 76 tall | \`h-19\` |`,
+  );
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="h-19">x</div>`);
+  const r = run(pkg, lib);
+  assert.doesNotMatch(r.stdout, /§12 GAP/);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(report.rules.plannedDiagnostic, undefined);
+  assert.ok(report.rules.planned.includes("h-19"), "the interim class is sanctioned as PLANNED");
+});
+
+test("a methodology with no §12 at all warns about nothing", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), PAGE_OK);
+  const r = run(pkg, lib);
+  assert.doesNotMatch(r.stdout, /§12 GAP/);
+});
+
+test("planned markers with no resolvable interim class warn", () => {
+  const { lib, pkg } = setup();
+  const base = readFileSync(join(lib, "short-app.md"), "utf8");
+  writeFileSync(
+    join(lib, "short-app.md"),
+    `${base}\nThe footer height is 76 \`[raw — planned, §12]\`.\n\n## 12. Planned library additions\n\nDecided; no table yet.\n`,
+  );
+  writeFileSync(join(pkg, "Page.svelte"), PAGE_OK);
+  const r = run(pkg, lib);
+  assert.match(r.stdout, /§12 GAP/);
+  assert.match(r.stdout, /marks values .*planned.*but §12 resolved no interim class/);
+});

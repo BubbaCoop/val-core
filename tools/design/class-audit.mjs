@@ -73,6 +73,9 @@ function forbiddenFromMethodology(md) {
   return out;
 }
 
+/** Why §12 resolved to nothing, when that is a format gap rather than "no planned additions". */
+let PLANNED_DIAGNOSTIC = null;
+
 /** §12 table: the column whose header mentions interim/class holds the ONE class per planned value. */
 function plannedFromMethodology(md) {
   const out = new Map();
@@ -86,7 +89,14 @@ function plannedFromMethodology(md) {
   const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
   const header = cells(rows[0]);
   const col = header.findIndex((h) => /interim|class/i.test(h));
-  if (col === -1) return out;
+  if (col === -1) {
+    // The section declares planned additions but names no interim class for any of them, so
+    // every class a page writes for one falls through to the generic rules and is sanctioned
+    // or rejected for unrelated reasons. Silent until now — the audit reported PLANNED: 0 and
+    // looked clean.
+    PLANNED_DIAGNOSTIC = `§12 lists ${rows.slice(2).length} planned addition(s) but its table has no interim/class column (headers: ${header.join(" | ")}), so no interim class is sanctioned. A page composing one of these writes a class the audit cannot recognise as planned. Add the column, or move the row to §10 once it ships.`;
+    return out;
+  }
   for (const line of rows.slice(2)) {
     const cs = cells(line);
     const ref = cs[0]?.replace(/`/g, "") ?? "";
@@ -118,6 +128,10 @@ function monoTokensFromTheme() {
 
 const FORBIDDEN = forbiddenFromMethodology(METHODOLOGY_MD);
 const PLANNED_CANDIDATES = plannedFromMethodology(METHODOLOGY_MD);
+if (!PLANNED_DIAGNOSTIC && !PLANNED_CANDIDATES.size && /\[(?:raw — |raw - )?planned(?: variant)?, §12\]/i.test(METHODOLOGY_MD)) {
+  PLANNED_DIAGNOSTIC =
+    "the methodology marks values `[raw — planned, §12]` but §12 resolved no interim class for any of them. Those values have no sanctioned spelling, so each use is written differently and the audit cannot tell them apart.";
+}
 const PLANNED = new Map(); // filled after the vocabulary is loaded — see sealPlanned()
 const ALLOW = new Set();
 const MONO_TOKENS = monoTokensFromTheme();
@@ -539,7 +553,12 @@ const report = {
   target: relative(process.cwd(), targetPath) || ".",
   library: relative(process.cwd(), libRoot) || ".",
   methodology: relative(process.cwd(), methodologyPath),
-  rules: { forbidden: [...FORBIDDEN], planned: [...PLANNED.values()].map((p) => p.class), monoTokens: [...MONO_TOKENS] },
+  rules: {
+    forbidden: [...FORBIDDEN],
+    planned: [...PLANNED.values()].map((p) => p.class),
+    monoTokens: [...MONO_TOKENS],
+    ...(PLANNED_DIAGNOSTIC ? { plannedDiagnostic: PLANNED_DIAGNOSTIC } : {}),
+  },
   files: files.map((f) => relative(process.cwd(), f)),
   vocabulary: {
     componentClasses: COMPONENT.size,
@@ -569,6 +588,7 @@ lines.push(`CLASS-AUDIT: ${report.verdict} | CLASSES: ${classes.length} | SANCTI
 for (const c of violations) lines.push(`  VIOLATION   ${c.cls.padEnd(36)} ${c.reason}  @ ${c.where[0]}${c.where.length > 1 ? ` (+${c.where.length - 1})` : ""}`);
 for (const i of issues) lines.push(`  VIOLATION   ${i.detail.padEnd(36)} ${i.reason}  @ ${i.file}:${i.line}`);
 for (const c of planned) lines.push(`  PLANNED     ${c.cls.padEnd(36)} ${c.source}  @ ${c.where[0]}`);
+if (PLANNED_DIAGNOSTIC) lines.push(`  §12 GAP     ${PLANNED_DIAGNOSTIC} (methodology format defect — report it; not a failure)`);
 for (const c of unsanctioned) lines.push(`  UNSANCTIONED ${c.cls.padEnd(35)} ${c.reason}  @ ${c.where[0]}${c.where.length > 1 ? ` (+${c.where.length - 1})` : ""}`);
 if (tailwind.checked) {
   lines.push(`  tailwind ${tailwind.tailwind}: ${tailwind.candidates} sanctioned utilities compiled; ${tailwind.nonCompiling.length} did not${tailwind.nonCompiling.length ? ` → ${tailwind.nonCompiling.join(" ")} (methodology/library defect — report it)` : ""}`);

@@ -21,6 +21,12 @@
  *   copy        every contract copy string appears verbatim in the package
  *   icons       every contract icon exists in the library sprite
  *   files       the route file, mapping.md, contract.json and HANDOFF.md exist
+ *   mapping     every `file:line` reference in mapping.md resolves: the file is in the
+ *               package, the line is in range, and the line actually carries the block's
+ *               anchor — `data-block="<id>"` where the file has one, otherwise the block's
+ *               root class. An estimated line number is worse than none: it sends a reader
+ *               to a plausible-looking neighbouring element. The failure names the line the
+ *               anchor is really on, so the fix is mechanical rather than another guess.
  *   handoff     HANDOFF.md carries its required section headings
  *   shell       no load path / sprite inlining inside the package (that lives at the app shell)
  */
@@ -371,6 +377,79 @@ if (existsSync(handoffPath)) {
   ];
   const headings = handoff.split("\n").filter((l) => /^#{1,3} /.test(l)).join("\n");
   for (const re of required) if (!re.test(headings)) fatal("handoff", `HANDOFF.md has no section matching ${re}`);
+}
+
+// ---- mapping: file:line references ---------------------------------------------------------
+
+const mappingPath = join(pkgDir, "mapping.md");
+if (existsSync(mappingPath)) {
+  let mapContract = null;
+  try {
+    mapContract = JSON.parse(readFileSync(join(pkgDir, "contract.json"), "utf8"));
+  } catch {}
+  const classesById = new Map((mapContract?.blocks ?? []).map((b) => [b.id, b.classes ?? []]));
+
+  /** Exact class tokens on a line — so `text-field-title-row` never satisfies `text-field`. */
+  const tokensOn = (line) => {
+    const out = new Set();
+    for (const m of line.matchAll(/\sclass\s*=\s*["']([^"']*)["']/g))
+      for (const t of m[1].split(/\s+/)) if (t) out.add(t);
+    for (const m of line.matchAll(/\sclass\s*=\s*\{([^}]*)\}/g))
+      for (const t of m[1].split(/[\s"'`{}]+/)) if (t) out.add(t);
+    return out;
+  };
+
+  /** Resolve a package-relative or shorthand path (`+page.svelte`) to one package file. */
+  const resolveRef = (ref) => {
+    const direct = join(pkgDir, ref);
+    if (existsSync(direct) && statSync(direct).isFile()) return direct;
+    const hits = pkgFiles.filter((f) => basename(f) === basename(ref));
+    return hits.length === 1 ? hits[0] : hits.length ? "AMBIGUOUS" : null;
+  };
+
+  for (const line of readFileSync(mappingPath, "utf8").split(/\r?\n/)) {
+    if (!line.trim().startsWith("|")) continue;
+    const cs = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+    const id = cs[0]?.replace(/`/g, "");
+    if (!/^b\d+$/.test(id ?? "")) continue;
+
+    for (const m of (cs[cs.length - 1] ?? "").matchAll(/`([^`\s:]+(?:\/[^`\s:]+)*):(\d+)`/g)) {
+      const [, refPath, lineNo] = m;
+      const n = Number(lineNo);
+      const file = resolveRef(refPath);
+      if (!file) { fatal("mapping", `${id}: mapping.md cites ${refPath}:${n}, which is not in the package`); continue; }
+      if (file === "AMBIGUOUS") { warn("mapping", `${id}: ${refPath} matches more than one package file — cannot verify :${n}`); continue; }
+
+      const text = readFileSync(file, "utf8").split(/\r?\n/);
+      const shown = relative(pkgDir, file);
+      if (n < 1 || n > text.length) {
+        fatal("mapping", `${id}: ${shown}:${n} is out of range (file has ${text.length} lines)`);
+        continue;
+      }
+      const cited = text[n - 1];
+
+      const blockAnchor = `data-block="${id}"`;
+      const hasBlockAnchor = text.some((l) => l.includes(blockAnchor));
+      if (hasBlockAnchor) {
+        if (!cited.includes(blockAnchor)) {
+          const real = text.map((l, i) => (l.includes(blockAnchor) ? i + 1 : 0)).filter(Boolean);
+          fatal("mapping", `${id}: ${shown}:${n} does not carry ${blockAnchor}`, `it is on line ${real.join(", ")} — cite that, computed rather than estimated`);
+        }
+        continue;
+      }
+
+      // No data-block in this file (a component definition): anchor on the block's root class,
+      // but only when that class is genuinely present somewhere — otherwise we cannot judge.
+      const root = classesById.get(id)?.[0];
+      if (!root) { warn("mapping", `${id}: ${shown}:${n} has no anchor to verify (no data-block, no contract classes)`); continue; }
+      const onLine = (l) => tokensOn(l).has(root);
+      const where = text.map((l, i) => (onLine(l) ? i + 1 : 0)).filter(Boolean);
+      if (!where.length) { warn("mapping", `${id}: ${shown}:${n} — class \`${root}\` appears nowhere in the file, cannot verify`); continue; }
+      if (!onLine(cited)) {
+        fatal("mapping", `${id}: ${shown}:${n} is not the root of \`${root}\``, `\`${root}\` is on line ${where.join(", ")} — cite that; line ${n} is \`${cited.trim().slice(0, 60)}\``);
+      }
+    }
+  }
 }
 
 // ---- 10. shell ------------------------------------------------------------------------------

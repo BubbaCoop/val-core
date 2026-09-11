@@ -53,6 +53,52 @@ session that heard it, and nothing could be built against it.
 
 Config: none. Existing runs and manifests are unaffected; `loops.feedback` is additive.
 
+### Fixed — from the first end-to-end run of the design pipeline
+
+The pipeline was driven end to end for the first time (one signed-off run, one deliberately
+blocked brief). Everything below is a defect that only a real run could surface.
+
+- **The methodology is resolved by path, never by search.** Intake was told to "Grep the `## `
+  headings to find them", which invited locating the *file* by search; it went looking under
+  `node_modules` before reaching the library's real methodology. It now opens exactly
+  `manifest.methodology` and is forbidden from globbing or grepping for the name — a packaged
+  file of the same name would be plausible and wrong, and composing against the wrong
+  methodology produces a page that audits clean. A guard test asserts val-core ships nothing
+  under `skills/` that could shadow a surface methodology file.
+- **The five design agents pin `model: inherit`.** Nothing pinned a model, so subagents took
+  the session default: two gates of one run silently executed on a different model than the
+  session and the run had to be restarted. The orchestrator also records the model in
+  `manifest.model`, so a run that changed model mid-flight is visible afterwards.
+- **Intake calibration for implied round-trips.** The same brief sentence drew three different
+  verdicts across three passes (no question / non-blocking / blocking). An action that must
+  reach a server but names no state for the wait is now resolved in a fixed order — §6
+  determines it, else §13 lists it open and it is BLOCKING, else `brief-missing-field` — and
+  the branch taken is recorded in the Source map so a re-run lands identically. A state is
+  never drafted; the non-blocking default class is missing non-legal copy only.
+- **Copy elements carry copy ids only.** The architect placed spec prose inside elements
+  carrying `data-copy-id`, which forced the verifier to annotate `verbatimInMarkup: false` for
+  an authoring slip rather than the casing-utility case that flag exists for. Descriptions
+  belong in `data-label` text or concept.md's mapping table.
+- **`class-audit` reports a §12 format gap instead of resolving silently to nothing.** A §12
+  table with no interim/class column made the PLANNED set resolve empty, so the audit printed
+  `PLANNED: 0` and looked clean while every interim class fell through to the generic rules.
+  It now prints a `§12 GAP` advisory naming the section's actual column headers, and a second
+  one when the methodology marks `[raw — planned, §12]` values that resolve to no class.
+  Advisory, never a failure: an empty §12 is legitimate, an unparseable one is not.
+- **`handoff-check` verifies every `file:line` in mapping.md.** A reference cited
+  `TextField.svelte:38` for a root element on line 36 — a plausible-looking neighbouring
+  element. Each reference must now resolve to a package file, an in-range line, and a line
+  that actually carries the block's anchor: `data-block="<id>"` where the file has one,
+  otherwise the block's root class matched as an exact token (so `text-field-title-row` never
+  satisfies `text-field`). The failure names the line the anchor is really on, so the fix is
+  computed rather than re-estimated. Unverifiable references warn rather than fail.
+- **The manifest records `package` beside `library`.** `library` is the machine name from
+  `library.name` and is deliberately not the npm package name; both are now written, so the
+  two can no longer be read as disagreeing.
+- **`/design` refuses to run in plan mode.** Every gate writes files; under plan mode those
+  writes are blocked and the stages degrade into drafting prose into a plan file — gates
+  appear to pass and nothing lands on disk. Gate 0 now stops with a message instead.
+
 **Not yet exercised by a real run.** The design pipeline itself has never been driven
 end-to-end; this ships in the same batch as whatever that first run surfaces.
 

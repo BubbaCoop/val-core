@@ -40,15 +40,28 @@ Methodology files live under `{{DESIGN_METHODOLOGY_DIR}}/`. Their companion
    supplied images, note their names in 00-input/README.md and do not copy
    them; no participant views images.
 3. Write manifest.json:
-   { "kind": "design", "runId", "library": "{{LIBRARY_NAME}}",
+   { "kind": "design", "runId",
+     "library": "{{LIBRARY_NAME}}", "package": "{{LIBRARY_PACKAGE}}",
      "surface": "<id>", "methodology": "{{DESIGN_METHODOLOGY_DIR}}/<file>",
      "output": "{{DESIGN_OUTPUT_FRAMEWORK}}",
      "gates": [], "loops": { "critic": 0, "verify": 0, "feedback": 0 },
      "approval": null, "status": "running" }
+   `library` is the machine name from `library.name` (run ids, headers); it is
+   deliberately NOT the npm package, which is recorded beside it as `package`.
+   Record the model you are running under as `"model"` — every stage inherits
+   it, and a run that silently changed model mid-flight is not reproducible.
 4. Confirm the design-* agents are registered in this session (they appear
    as subagent types). If they are missing, STOP and tell the requester to
    start a new session — a general-purpose fallback carries the full tool
    set and none of the discipline.
+5. **Refuse to run in plan mode.** Every gate of this pipeline writes files —
+   the brief, the concept, the package. Under plan mode those writes are
+   blocked, and the stages degrade quietly into drafting prose into a plan
+   file: gates appear to pass, nothing lands on disk, and the failure only
+   surfaces when a later stage cannot read what the earlier one "wrote". If
+   you are in plan mode, STOP at this gate and say so plainly — ask the
+   requester to leave plan mode and re-invoke `/design`. Do not begin the run
+   and do not write a plan describing what you would have built.
 
 ### Gate 1 — intake
 Invoke `design-brief-intake` with the run directory. Parse its status line;

@@ -6,6 +6,7 @@ description: >
   Normalises it into 01-brief.md on the fixed schema and raises BLOCKING
   questions for required fields the brief lacks. Never chooses components.
 tools: Read, Write, Glob, Grep
+model: inherit
 ---
 {{GENERATED_HEADER}}
 
@@ -17,10 +18,21 @@ answers override earlier text), then {{CORE_SKILLS_DIR}}/design-methodology/SKIL
 §3–§6 (stop triggers, question format, the trailer sections every brief
 carries). The surface's brief schema, required fields and stop triggers are
 in the surface block at the end of this file — the one whose id matches
-manifest.surface. From the surface
-methodology named in the manifest, read ONLY these sections — Grep the `## `
-headings to find them, then Read those line ranges: §2 Archetypes, §8 Copy
-and tone, §9 Anti-patterns, §13 Open items. Do not read the rest; component
+manifest.surface.
+
+**Resolve the methodology by path, never by search.** Its location is
+`manifest.methodology`, relative to the repo root — already the full
+`{{DESIGN_METHODOLOGY_DIR}}/<file>` path. Open exactly that. Do NOT Glob for
+the file name, do NOT Grep the filesystem for it, and never read a same-named
+file from anywhere else — `node_modules/` above all, where a package may ship
+a file with the same name that is not this library's methodology. If the path
+in the manifest does not exist, STOP and say so; a methodology found by
+search is not the methodology, and composing against the wrong one produces a
+page that audits clean and is wrong.
+
+Within that one file read ONLY these sections — Grep its `## ` headings to
+locate the line ranges, then Read those ranges: §2 Archetypes, §8 Copy and
+tone, §9 Anti-patterns, §13 Open items. Do not read the rest; component
 choice is the architect's job, not yours.
 
 Never Read an image, never open Figma, never read a `*-decisions.md` file or
@@ -47,6 +59,20 @@ questions, Methodology rules applied, Unsure). Rules:
 2b. SURFACE STOPS: the surface block's stop triggers name the surface's own
    blocking conditions (an unverified archetype, a held-out page…). Each is
    a BLOCKING question with the TRIGGER the block names.
+2c. IMPLIED ROUND-TRIPS — decide this the same way every time. A brief that
+   describes an action which must reach a server ("validates and saves",
+   "submits", "checks availability") but names no state for the wait is NOT a
+   judgement call, and it is NOT a missing-copy default. Resolve it in this
+   order, and record which branch you took in the Source map so a re-run
+   lands identically:
+     a. §6 (or the surface's state section) determines what shows during a
+        round-trip → record that, no question.
+     b. §13 lists the loading/pending state as unspecified → **BLOCKING**,
+        `TRIGGER: §13-open-item`. This is the common case and it is not
+        satisfied by "assume no loading state"; the requester decides.
+     c. Neither → **BLOCKING**, `TRIGGER: brief-missing-field`.
+   The non-blocking default class is missing non-legal COPY only. A state is
+   never drafted, however obvious the spinner seems.
 3. ARCHETYPE COLLISIONS: if the brief describes a step no §2 archetype
    covers (a table with sorting, a dashboard tile, a file upload…), raise
    `TRIGGER: archetype-not-in-§2` and quote the sentence. Do not propose a

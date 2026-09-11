@@ -7,6 +7,7 @@ description: >
   to a library class or a methodology §11 composition. Stops on any block the
   library and methodology do not determine.
 tools: Read, Write, Bash, Grep, Glob
+model: inherit
 ---
 {{GENERATED_HEADER}}
 
@@ -87,6 +88,15 @@ coincidence, not a licence.
    format placeholders, uppercase only via the type-* utility — and marked
    DRAFT in the copy table and with `data-copy-source="DRAFT"` in the
    concept. Legal/consent copy is never drafted (BLOCKING question).
+5b. A COPY ELEMENT CONTAINS THE COPY AND NOTHING ELSE. An element carrying
+   `data-copy-id` holds exactly the string that copy id names — no
+   parenthetical, no "(3 of 5)", no field list, no note about behaviour, no
+   restatement of the spec. Describe the block in its `data-label` text or in
+   concept.md's mapping table instead. When spec prose rides inside a copy
+   element the build cannot place the string verbatim, and the verifier is
+   forced to annotate `verbatimInMarkup: false` for a reason that is an
+   authoring slip rather than a real casing-utility case — which is the only
+   thing that flag is for.
 6. FORBIDDEN. Walk §9.2 and §9.3 against your concept before writing. A
    collision with the brief's ask → `TRIGGER: §9-forbidden`, stop; a
    collision you introduced → fix it.

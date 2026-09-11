@@ -6,6 +6,7 @@ description: >
   block by block, and returns PASS or a numbered fix list. Runs before the
   human ever sees the concept.
 tools: Read, Bash, Grep, Glob, Write
+model: inherit
 ---
 {{GENERATED_HEADER}}
 

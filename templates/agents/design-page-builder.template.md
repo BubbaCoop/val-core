@@ -6,6 +6,7 @@ description: >
   {{DESIGN_OUTPUT_FRAMEWORK}} handoff package in 05-package/, one-to-one with
   the concept and adding nothing.
 tools: Read, Write, Bash, Grep, Glob
+model: inherit
 ---
 {{GENERATED_HEADER}}
 

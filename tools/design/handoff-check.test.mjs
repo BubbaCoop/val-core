@@ -61,7 +61,7 @@ const HANDOFF = `# Handoff
 ## Unsure
 `;
 
-function setup({ concept = CONCEPT, page = PAGE, contract = CONTRACT, handoff = HANDOFF, hash, sprite = true } = {}) {
+function setup({ concept = CONCEPT, page = PAGE, contract = CONTRACT, handoff = HANDOFF, hash, sprite = true, mapping, components } = {}) {
   const run = mkdtempSync(join(tmpdir(), "val-handoff-"));
   mkdirSync(join(run, "02-concept"), { recursive: true });
   mkdirSync(join(run, "05-package", "src", "routes"), { recursive: true });
@@ -70,7 +70,13 @@ function setup({ concept = CONCEPT, page = PAGE, contract = CONTRACT, handoff = 
   writeFileSync(join(run, "04-approval.md"), `# Approval\n| Concept | \`02-concept/concept.v1.html\` |\n| sha256 | \`${sha}\` |\n`);
   writeFileSync(join(run, "05-package", "src", "routes", "+page.svelte"), page);
   writeFileSync(join(run, "05-package", "contract.json"), JSON.stringify(contract, null, 2));
-  writeFileSync(join(run, "05-package", "mapping.md"), "| block | class | file |\n");
+  writeFileSync(join(run, "05-package", "mapping.md"), mapping ?? "| block | class | file |\n");
+  if (components) {
+    mkdirSync(join(run, "05-package", "src", "lib", "components"), { recursive: true });
+    for (const [name, text] of Object.entries(components)) {
+      writeFileSync(join(run, "05-package", "src", "lib", "components", name), text);
+    }
+  }
   writeFileSync(join(run, "05-package", "HANDOFF.md"), handoff);
   let spritePath = null;
   if (sprite) {
@@ -248,4 +254,79 @@ test("a .svelte file that does not compile fails", () => {
   const r = run(dir, spritePath);
   assert.equal(r.status, 1);
   assert.ok(checks(report(dir), "compile").length >= 1, JSON.stringify(report(dir).findings, null, 1));
+});
+
+// ---- mapping.md file:line references -------------------------------------------------
+
+const MAP_HEAD = "| block | region | pattern | class(es) | file:line |\n| --- | --- | --- | --- | --- |\n";
+
+test("mapping.md line references that point at the block's anchor pass", () => {
+  // PAGE puts data-block="b01" on line 4 and data-block="b02" on line 5.
+  const { run: dir, spritePath } = setup({
+    mapping: MAP_HEAD +
+      "| b01 | header | §10 | `header` | `+page.svelte:4` |\n" +
+      "| b02 | content | §10 | `text-field` | `+page.svelte:5` |\n",
+  });
+  const r = run(dir, spritePath);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(checks(report(dir), "mapping").length, 0);
+});
+
+test("an estimated line number fails and names the line the anchor is really on", () => {
+  const { run: dir, spritePath } = setup({
+    mapping: MAP_HEAD + "| b02 | content | §10 | `text-field` | `+page.svelte:9` |\n",
+  });
+  const r = run(dir, spritePath);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  const f = checks(report(dir), "mapping");
+  assert.equal(f.length, 1);
+  assert.match(f[0].message, /b02: src\/routes\/\+page\.svelte:9 does not carry data-block="b02"/);
+  assert.match(f[0].detail, /it is on line 5 — cite that, computed rather than estimated/);
+});
+
+test("a line number past the end of the file fails", () => {
+  const { run: dir, spritePath } = setup({
+    mapping: MAP_HEAD + "| b01 | header | §10 | `header` | `+page.svelte:900` |\n",
+  });
+  assert.equal(run(dir, spritePath).status, 1);
+  assert.match(checks(report(dir), "mapping")[0].message, /is out of range \(file has \d+ lines\)/);
+});
+
+test("a file that is not in the package fails", () => {
+  const { run: dir, spritePath } = setup({
+    mapping: MAP_HEAD + "| b01 | header | §10 | `header` | `src/lib/components/Ghost.svelte:3` |\n",
+  });
+  assert.equal(run(dir, spritePath).status, 1);
+  assert.match(checks(report(dir), "mapping")[0].message, /which is not in the package/);
+});
+
+test("a component definition with no data-block is anchored on the block's root class", () => {
+  // TextField.svelte root `.text-field` is line 3; line 4 is the title row, whose class
+  // merely starts with the same string — the check must not accept it.
+  const TEXT_FIELD = `<script>\n  let { label } = $props();\n</script>\n<div class="text-field">\n  <div class="text-field-title-row">{label}</div>\n</div>\n`;
+  const good = setup({
+    components: { "TextField.svelte": TEXT_FIELD },
+    mapping: MAP_HEAD + "| b02 | content | §10 | `text-field` | `+page.svelte:5` → `src/lib/components/TextField.svelte:4` |\n",
+  });
+  assert.equal(run(good.run, good.spritePath).status, 0, "line 4 is the .text-field root");
+  assert.equal(checks(report(good.run), "mapping").length, 0);
+
+  const bad = setup({
+    components: { "TextField.svelte": TEXT_FIELD },
+    mapping: MAP_HEAD + "| b02 | content | §10 | `text-field` | `+page.svelte:5` → `src/lib/components/TextField.svelte:5` |\n",
+  });
+  assert.equal(run(bad.run, bad.spritePath).status, 1, "line 5 is text-field-title-row, not the root");
+  const f = checks(report(bad.run), "mapping");
+  assert.match(f[0].message, /is not the root of `text-field`/);
+  assert.match(f[0].detail, /`text-field` is on line 4 — cite that/);
+});
+
+test("a class that appears nowhere in the cited file warns rather than failing", () => {
+  const { run: dir, spritePath } = setup({
+    components: { "Other.svelte": "<div class=\"unrelated\">x</div>\n" },
+    mapping: MAP_HEAD + "| b02 | content | §10 | `text-field` | `src/lib/components/Other.svelte:1` |\n",
+  });
+  assert.equal(run(dir, spritePath).status, 0, "unverifiable is not a failure");
+  const warns = report(dir).findings.filter((f) => f.check === "mapping" && f.severity === "warn");
+  assert.match(warns[0].message, /appears nowhere in the file, cannot verify/);
 });
