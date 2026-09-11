@@ -1,0 +1,141 @@
+/*
+ * Design pipeline — grey-box stylesheet for concept.v<n>.html.
+ *
+ * The concept is a WIREFRAME: every block is a labelled grey box, styled only
+ * by the data-* attributes below. The architect links this file and never
+ * writes CSS or class attributes of its own — the real library classes live
+ * in data-class and are what the critic and the build consume.
+ *
+ * Contract (see skills/design-methodology/SKILL.md §7):
+ *   <main data-concept data-viewport="web|mobile">
+ *     <section data-block="b01" data-archetype="form" data-class=".text-field …"
+ *              data-methodology="§4 §5" data-states="empty error" data-copy="c01">
+ *       <p data-label>…visible content / copy…</p>
+ *     </section>
+ */
+:root {
+  color-scheme: light;
+}
+body {
+  margin: 0;
+  padding: 32px;
+  background: #e9e9e6;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+}
+[data-concept] {
+  margin: 0 auto 48px;
+  background: #f6f6f4;
+  border: 1px solid #b8b8b3;
+  padding: 24px;
+  box-sizing: border-box;
+}
+[data-concept][data-viewport="web"] {
+  width: 560px;
+}
+[data-concept][data-viewport="mobile"] {
+  width: 375px;
+  padding: 16px;
+}
+[data-concept]::before {
+  content: "VIEWPORT: " attr(data-viewport) " · " attr(data-title);
+  display: block;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: #54565b;
+  margin-bottom: 16px;
+}
+[data-block] {
+  position: relative;
+  border: 1px dashed #7a7a75;
+  background: #ffffff;
+  padding: 28px 12px 12px;
+  margin: 0 0 12px;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+[data-block]::before {
+  content: attr(data-block) " · " attr(data-region) " · " attr(data-archetype) " · " attr(data-class);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 8px;
+  background: #d9d9d4;
+  font: 600 10px/1.4 ui-monospace, Menlo, monospace;
+  letter-spacing: 0.02em;
+  color: #2e3134;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-block][data-states]::after {
+  content: "states: " attr(data-states) " · " attr(data-methodology);
+  display: block;
+  margin-top: 8px;
+  font: 10px/1.4 ui-monospace, Menlo, monospace;
+  color: #6f7276;
+}
+[data-block] [data-block] {
+  margin-top: 8px;
+  background: #fafaf9;
+}
+[data-block][data-blocked] {
+  border: 2px dashed #c0362c;
+  background: #fbeeee;
+}
+[data-block][data-blocked]::before {
+  background: #c0362c;
+  color: #fff;
+  content: attr(data-block) " · BLOCKED: " attr(data-blocked) " · " attr(data-region);
+}
+[data-concept][data-viewport="dashboard"] {
+  width: 1200px;
+}
+[data-label] {
+  margin: 0;
+}
+[data-label][data-role="eyebrow"] {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6f7276;
+}
+[data-label][data-role="title"] {
+  font-size: 22px;
+  font-weight: 500;
+}
+[data-label][data-role="description"] {
+  color: #54565b;
+}
+[data-copy-source="DRAFT"] {
+  display: block;
+  border-left: 3px solid #b4791c;
+  background: #fdf6e7;
+  padding: 2px 6px;
+  margin: 4px 0;
+}
+[data-copy-source="DRAFT"]::after {
+  content: " DRAFT";
+  font-size: 10px;
+  font-weight: 700;
+  color: #8b5d16;
+}
+[data-control] {
+  display: inline-block;
+  min-width: 96px;
+  padding: 10px 12px;
+  border: 1px solid #7a7a75;
+  background: #eeeeeb;
+  text-align: center;
+  margin-right: 8px;
+}
+[data-control="primary"] {
+  background: #cfcfca;
+  font-weight: 600;
+}
+[data-control][data-disabled="true"] {
+  opacity: 0.4;
+}

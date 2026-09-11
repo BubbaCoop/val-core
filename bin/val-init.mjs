@@ -11,7 +11,8 @@
  * Reads val/config.json (schema: schema/val.config.schema.json), applies the
  * schema defaults, substitutes {{PLACEHOLDERS}} into every template under
  * templates/agents and templates/commands, and writes the results into the
- * repo's .claude/ directory. Also links <paths.toolsDir> to this package's
+ * repo's .claude/ directory. Templates route by prefix: extract-* need
+ * pipelines.extract, design-* need pipelines.design, the rest pipelines.val. Also links <paths.toolsDir> to this package's
  * tools/ so `node val/tools/<tool>.mjs` keeps working.
  *
  * Generated files carry a header saying so. Edit the template or the config,
@@ -73,7 +74,7 @@ validate(config, schema);
 
 // ---- substitutions ------------------------------------------------------------
 
-const { library, paths, typography = {}, pipelines = {} } = config;
+const { library, paths, typography = {}, pipelines = {}, design = {} } = config;
 const CORE_PKG_DIR = `node_modules/${corePkg.name}`;
 
 const fonts = typography.fonts?.length ? typography.fonts : ["@fontsource/inter"];
@@ -82,9 +83,82 @@ const fontList =
     ? fonts[0]
     : fonts.slice(0, -1).join(", ") + " and " + fonts[fonts.length - 1];
 
+const wantVal = pipelines.val !== false;
+const wantExtract = pipelines.extract !== false;
+const wantDesign = pipelines.design === true;
+
+const libraryRoot = (paths.libraryRoot ?? ".").replace(/\/$/, "");
+function renderSurface(id, sf) {
+  const q = (t) => "`" + t + "`";
+  const lines = [
+    `### Surface ${q(id)} — ${sf.displayName}`,
+    `Methodology: ${q(`${methodologyDir}/${sf.methodology}`)} (read in full; its §12 interim-class column and §10 unused-component line are binding).`,
+  ];
+  if (sf.flows?.length) lines.push(`Flows: ${sf.flows.map(q).join(", ")}`);
+  if (sf.viewports?.length) {
+    lines.push(
+      `Viewports — one ${q('<main data-concept data-viewport="<id>">')} each, all mandatory: ${sf.viewports
+        .map((v) => q(v.id) + (v.note ? ` — ${v.note}` : ""))
+        .join("; ")}`,
+    );
+  }
+  if (sf.regions?.length) lines.push(`Region vocabulary (${q("data-region")}): ${sf.regions.map(q).join(" · ")}`);
+  if (sf.briefSchema?.length) {
+    lines.push(
+      "Brief schema — 01-brief.md body headings in this order (★ = required; missing → " +
+        q("brief-missing-field") +
+        "), then the trailer from the skill:",
+      "```",
+    );
+    for (const h of sf.briefSchema) lines.push(`## ${h.heading}${h.required ? " ★" : ""}${h.hint ? `   ${h.hint}` : ""}`);
+    lines.push("```");
+  }
+  if (sf.stopTriggers?.length) {
+    lines.push("Surface stop triggers (all BLOCKING, in addition to the five generic ones):");
+    for (const t of sf.stopTriggers) lines.push(`- ${q(t.trigger)} — ${t.when}`);
+  }
+  if (sf.conceptSections?.length) {
+    lines.push("Concept sections — concept.md opens with these, in order, before the generic sections:");
+    sf.conceptSections.forEach((c, i) => lines.push(`${i + 1}. ${c}`));
+  }
+  return lines.join("\n");
+}
+const surfaces = design.surfaces ?? {};
+const methodologyDir = (design.methodologyDir ?? "design-methodology").replace(/\/$/, "");
+const output = design.output ?? {};
+if (wantDesign) {
+  if (!Object.keys(surfaces).length) {
+    fail("pipelines.design is true but design.surfaces is empty — add at least one surface (see the schema).");
+  }
+  for (const [id, surface] of Object.entries(surfaces)) {
+    const file = resolve(repoRoot, methodologyDir, surface.methodology);
+    if (!existsSync(file)) {
+      console.warn(`val-init: warning — surface "${id}" methodology not found at ${relative(repoRoot, file)}; the design agents will BLOCK until it exists.`);
+    }
+    if (!surface.briefSchema?.length) {
+      console.warn(`val-init: warning — surface "${id}" has no design.surfaces.${id}.briefSchema; intake has no brief schema without it.`);
+    }
+  }
+}
+const surfacesTable = Object.keys(surfaces).length
+  ? [
+      "| id | surface | methodology | viewports | flows |",
+      "|---|---|---|---|---|",
+      ...Object.entries(surfaces).map(
+        ([id, sf]) =>
+          `| ${id} | ${sf.displayName} | ${methodologyDir}/${sf.methodology} | ${(sf.viewports ?? []).map((v) => v.id).join(", ") || "—"} | ${(sf.flows ?? []).join(", ") || "—"} |`,
+      ),
+    ].join("\n")
+  : "(no surfaces configured — set design.surfaces in val/config.json)";
+const frameworkLabel = output.framework === "sveltekit" ? "SvelteKit" : output.framework ?? "SvelteKit";
+const outputFramework = `${frameworkLabel} + Svelte ${output.svelteMajor ?? "5"}${String(output.svelteMajor ?? "5") === "5" ? " (runes)" : ""}`;
+
 const substitutions = {
   LIBRARY_NAME: library.name,
   LIBRARY_DISPLAY_NAME: library.displayName,
+  LIBRARY_PACKAGE:
+    library.package ?? "<the library's npm package — set library.package in val/config.json>",
+  LIBRARY_ROOT: libraryRoot,
   FIGMA_FILE_KEY: library.figmaFileKey,
   DESIGN_SYSTEM_SKILL_PATH: paths.designSystemSkill,
   REGISTRY_PATH: paths.componentRegistry,
@@ -100,6 +174,14 @@ const substitutions = {
   VISUAL_SPECS_SCRIPT: paths.visualSpecsScript,
   COMPONENT_PROCESS_DOC: paths.componentProcessDoc,
   CLAUDE_MD_SECTIONS: paths.claudeMdSections,
+  DESIGN_METHODOLOGY_DIR: methodologyDir,
+  DESIGN_SURFACES_TABLE: surfacesTable,
+  DESIGN_SURFACE_PROFILES: Object.keys(surfaces).length
+    ? Object.entries(surfaces).map(([id, sf]) => renderSurface(id, sf)).join("\n\n")
+    : "(no surfaces configured)",
+  DESIGN_OUTPUT_FRAMEWORK: outputFramework,
+  DESIGN_PAGES_DIR: (output.pagesDir ?? "src/routes").replace(/\/$/, ""),
+  DESIGN_COMPONENTS_DIR: (output.componentsDir ?? "src/lib/components").replace(/\/$/, ""),
   CORE_SKILLS_DIR: `${CORE_PKG_DIR}/skills`,
   QA_PROBES_PATH:
     paths.qaProbes ??
@@ -130,9 +212,6 @@ function substitute(text, file) {
 
 // ---- generate -----------------------------------------------------------------
 
-const wantVal = pipelines.val !== false;
-const wantExtract = pipelines.extract !== false;
-
 const jobs = [
   { src: join(coreRoot, "templates", "agents"), dest: join(repoRoot, ".claude", "agents") },
   { src: join(coreRoot, "templates", "commands"), dest: join(repoRoot, ".claude", "commands") },
@@ -144,7 +223,12 @@ for (const { src, dest } of jobs) {
   for (const file of readdirSync(src).filter((f) => f.endsWith(".template.md")).sort()) {
     const outName = file.replace(/\.template\.md$/, ".md");
     const isExtract = /^extract/.test(outName);
-    if ((isExtract && !wantExtract) || (!isExtract && !wantVal)) {
+    const isDesign = /^design/.test(outName);
+    if (
+      (isExtract && !wantExtract) ||
+      (isDesign && !wantDesign) ||
+      (!isExtract && !isDesign && !wantVal)
+    ) {
       results.skipped.push(outName);
       continue;
     }
@@ -288,6 +372,12 @@ function validate(value, node, path = "config") {
       }
       for (const [k, sub] of Object.entries(n.properties ?? {})) {
         if (v[k] !== undefined) walk(v[k], sub, `${p}.${k}`);
+      }
+      // A map (additionalProperties carrying a schema): validate every entry against it.
+      if (n.additionalProperties && typeof n.additionalProperties === "object") {
+        for (const [k, item] of Object.entries(v)) {
+          if (!n.properties?.[k]) walk(item, n.additionalProperties, `${p}.${k}`);
+        }
       }
     } else if (n.type === "string") {
       if (typeof v !== "string") errors.push(`${p}: expected string`);
