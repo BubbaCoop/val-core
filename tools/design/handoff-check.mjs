@@ -35,8 +35,9 @@ import { resolve, join, relative, extname, basename, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { parseArgs, fail, printCapped } from "../lib/args.mjs";
+import { resolveReport } from "../lib/report.mjs";
 
-const { positional, opts } = parseArgs(process.argv.slice(2));
+const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-write"] });
 const runDir = positional[0];
 if (!runDir) fail("Usage: node <tools-dir>/design/handoff-check.mjs <run-dir> [--package 05-package] [--sprite path] [--out json]");
 const runPath = resolve(runDir);
@@ -485,12 +486,13 @@ const report = {
   findings,
   verdict: fails.length ? "FAIL" : "PASS",
 };
-const outPath = resolve(opts.out ?? join(runPath, "handoff-check.json"));
-writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
+const dest = resolveReport({ out: opts.out, noWrite: opts["no-write"], defaultPath: join(runPath, "handoff-check.json") });
+const outPath = dest.path;
+if (outPath) writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
 
 const lines = [`HANDOFF-CHECK: ${report.verdict} | BLOCKS: ${report.counts.contractBlocks}/${report.counts.conceptBlocks} | STATES: ${report.counts.states} | COPY: ${report.counts.copy} | FAILURES: ${fails.length} | WARNINGS: ${warns.length}`];
 for (const f of fails) lines.push(`  FAIL  [${f.check}] ${f.message}${f.detail ? ` — ${f.detail}` : ""}`);
 for (const f of warns) lines.push(`  warn  [${f.check}] ${f.message}${f.detail ? ` — ${f.detail}` : ""}`);
-lines.push(`  report: ${relative(process.cwd(), outPath)}`);
+lines.push(outPath ? `  report: ${relative(process.cwd(), outPath)}` : `  report not written: ${dest.reason}`);
 printCapped(lines, 40);
 process.exit(report.verdict === "PASS" ? 0 : 1);

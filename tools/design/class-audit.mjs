@@ -45,8 +45,9 @@ import { resolve, join, extname, relative, dirname, basename } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { parseArgs, fail, printCapped } from "../lib/args.mjs";
+import { resolveReport } from "../lib/report.mjs";
 
-const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-tailwind"] });
+const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-tailwind", "no-write"] });
 const target = positional[0];
 if (!target || !opts.library || !opts.methodology) {
   fail(
@@ -580,8 +581,10 @@ const report = {
   verdict: violations.length + unsanctioned.length + issues.length === 0 ? "PASS" : "FAIL",
 };
 
-const outPath = resolve(opts.out ?? join(statSync(targetPath).isDirectory() ? targetPath : dirname(targetPath), "class-audit.json"));
-writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
+const defaultOut = join(statSync(targetPath).isDirectory() ? targetPath : dirname(targetPath), "class-audit.json");
+const dest = resolveReport({ out: opts.out, noWrite: opts["no-write"], defaultPath: defaultOut });
+const outPath = dest.path;
+if (outPath) writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
 
 const lines = [];
 lines.push(`CLASS-AUDIT: ${report.verdict} | CLASSES: ${classes.length} | SANCTIONED: ${sanctioned.length} | PLANNED: ${planned.length} | UNSANCTIONED: ${unsanctioned.length} | VIOLATIONS: ${violations.length + issues.length}`);
@@ -595,6 +598,6 @@ if (tailwind.checked) {
 } else {
   lines.push(`  tailwind check skipped: ${tailwind.reason}`);
 }
-lines.push(`  report: ${relative(process.cwd(), outPath)}`);
+lines.push(outPath ? `  report: ${relative(process.cwd(), outPath)}` : `  report not written: ${dest.reason}`);
 printCapped(lines, 40);
 process.exit(report.verdict === "PASS" ? 0 : 1);

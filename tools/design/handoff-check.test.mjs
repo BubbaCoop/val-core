@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -85,7 +85,8 @@ function setup({ concept = CONCEPT, page = PAGE, contract = CONTRACT, handoff = 
   }
   return { run, spritePath };
 }
-const run = (dir, sprite) => spawnSync(process.execPath, [TOOL, dir, ...(sprite ? ["--sprite", sprite] : [])], { encoding: "utf8" });
+const run = (dir, sprite, extra = []) =>
+  spawnSync(process.execPath, [TOOL, dir, ...(sprite ? ["--sprite", sprite] : []), ...extra], { encoding: "utf8", cwd: dir });
 const report = (dir) => JSON.parse(readFileSync(join(dir, "handoff-check.json"), "utf8"));
 const checks = (rep, check) => rep.findings.filter((f) => f.check === check && f.severity === "fail");
 
@@ -329,4 +330,45 @@ test("a class that appears nowhere in the cited file warns rather than failing",
   assert.equal(run(dir, spritePath).status, 0, "unverifiable is not a failure");
   const warns = report(dir).findings.filter((f) => f.check === "mapping" && f.severity === "warn");
   assert.match(warns[0].message, /appears nowhere in the file, cannot verify/);
+});
+
+// ---- the report must not be written into a tree you are only inspecting ---------------
+
+test("--no-write leaves no report file behind", () => {
+  const { run: dir, spritePath } = setup();
+  const r = run(dir, spritePath, ["--no-write"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /report not written: --no-write/);
+  assert.equal(existsSync(join(dir, "handoff-check.json")), false);
+});
+
+test("running from outside the run directory writes nothing into it", () => {
+  const { run: dir, spritePath } = setup();
+  const elsewhere = mkdtempSync(join(tmpdir(), "val-elsewhere-"));
+  const r = spawnSync(
+    process.execPath,
+    [TOOL, dir, ...(spritePath ? ["--sprite", spritePath] : [])],
+    { encoding: "utf8", cwd: elsewhere },
+  );
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /report not written: target is outside the working directory/);
+  assert.equal(
+    existsSync(join(dir, "handoff-check.json")),
+    false,
+    "checking someone else's run directory must leave it byte-identical",
+  );
+});
+
+test("--out still writes to an explicit destination from anywhere", () => {
+  const { run: dir, spritePath } = setup();
+  const elsewhere = mkdtempSync(join(tmpdir(), "val-elsewhere-"));
+  const dest = join(elsewhere, "report.json");
+  const r = spawnSync(
+    process.execPath,
+    [TOOL, dir, ...(spritePath ? ["--sprite", spritePath] : []), "--out", dest],
+    { encoding: "utf8", cwd: elsewhere },
+  );
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(existsSync(dest));
+  assert.equal(existsSync(join(dir, "handoff-check.json")), false);
 });

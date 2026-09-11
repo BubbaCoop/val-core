@@ -37,7 +37,7 @@ function runDir(feedback, { concepts = { 1: CONCEPT } } = {}) {
 }
 
 const run = (dir, ...args) => {
-  const r = spawnSync(process.execPath, [TOOL, dir, ...args], { encoding: "utf8" });
+  const r = spawnSync(process.execPath, [TOOL, dir, ...args], { encoding: "utf8", cwd: dir });
   return { ...r, out: `${r.stdout}${r.stderr}` };
 };
 

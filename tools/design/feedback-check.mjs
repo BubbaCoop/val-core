@@ -40,11 +40,12 @@
 import { readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
 import { parseArgs, fail, printCapped } from "../lib/args.mjs";
+import { resolveReport } from "../lib/report.mjs";
 
 const COLUMNS = ["id", "block", "severity", "rule", "finding", "fix"];
 const SEVERITIES = new Set(["blocking", "advisory"]);
 
-const { positional, opts } = parseArgs(process.argv.slice(2));
+const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-write"] });
 const runDir = positional[0];
 if (!runDir) {
   fail(
@@ -253,9 +254,17 @@ const report = {
 };
 
 if (opts.out) {
-  const outPath = opts.out === "json" ? join(runPath, "feedback-check.json") : resolve(opts.out);
-  writeFileSync(outPath, JSON.stringify(report, null, 2));
-  report.written = outPath;
+  const dest = resolveReport({
+    out: opts.out === "json" ? undefined : opts.out,
+    noWrite: opts["no-write"],
+    defaultPath: join(runPath, "feedback-check.json"),
+  });
+  if (dest.path) {
+    writeFileSync(dest.path, JSON.stringify(report, null, 2));
+    report.written = dest.path;
+  } else {
+    report.notWritten = dest.reason;
+  }
 }
 
 const lines = [
@@ -265,6 +274,7 @@ for (const f of [...fails, ...warns]) {
   lines.push(`  ${f.severity === "fail" ? "FAIL" : "warn"}  ${f.check.padEnd(9)} ${f.message}${f.detail ? `\n        ${f.detail}` : ""}`);
 }
 if (report.written) lines.push(`  report: ${report.written}`);
+else if (report.notWritten) lines.push(`  report not written: ${report.notWritten}`);
 printCapped(lines);
 
 process.exit(report.verdict === "PASS" ? 0 : 1);

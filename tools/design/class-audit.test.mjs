@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,7 +62,9 @@ function run(target, root, extra = []) {
   return spawnSync(
     process.execPath,
     [TOOL, target, "--library", root, "--methodology", join(root, "short-app.md"), "--no-tailwind", ...extra],
-    { encoding: "utf8" },
+    // cwd is the target's own tree, which is how an agent invokes it: from the repo root,
+    // with the run directory inside. The report guard only writes inside the working dir.
+    { encoding: "utf8", cwd: statSync(target).isDirectory() ? target : dirname(target) },
   );
 }
 

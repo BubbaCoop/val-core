@@ -99,6 +99,25 @@ blocked brief). Everything below is a defect that only a real run could surface.
   writes are blocked and the stages degrade into drafting prose into a plan file — gates
   appear to pass and nothing lands on disk. Gate 0 now stops with a message instead.
 
+### Fixed — a check no longer writes into a tree it is only inspecting
+
+`class-audit` and `handoff-check` wrote their JSON report beside the target unconditionally.
+That is right when auditing your own run and wrong the moment the tool is pointed at someone
+else's: running either against a tracked fixture in another repo silently modified it, and the
+damage showed up later as an unexplained `git status`.
+
+- New `tools/lib/report.mjs` decides where a report may go, shared by all three design tools.
+  Default: write beside the target **only if that lands inside the current working directory**.
+  Outside it, skip and print `report not written: …` with the reason. `--out <path>` is explicit
+  intent and always writes; the new `--no-write` always suppresses.
+- Agents are unaffected — they invoke the tools from their repo root with the run directory
+  inside it, which is exactly the case that still writes.
+- Paths are compared by **real path**, not spelling. On macOS `process.cwd()` reports
+  `/private/var/…` while an argument naming the same directory reads `/var/…`; comparing the
+  spellings classified an ordinary in-tree run as outside, and any run directory reached
+  through a symlink would have hit the same thing.
+- `npm test` now also covers `tools/lib/`.
+
 **Not yet exercised by a real run.** The design pipeline itself has never been driven
 end-to-end; this ships in the same batch as whatever that first run surfaces.
 
