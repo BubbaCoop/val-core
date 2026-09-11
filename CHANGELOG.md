@@ -11,6 +11,27 @@ README "Releasing".
 
 ## [Unreleased]
 
+### Fixed — the Tailwind compile check vanished silently in any path containing a space
+
+`class-audit` built its library import as a `file:` URL and the stylesheet resolver read the
+path back off `URL.pathname`, which keeps percent-encoding. In a repo whose path contains a
+space the resolver asked for `.../valiify%20shortapp%20library/src/library.css`, `readFileSync`
+threw ENOENT, the throw was caught by the surrounding handler and downgraded to an advisory —
+and the audit still printed `PASS`. Every audit in such a repo lost its compile check without
+saying so. `--package` hid the bug entirely by taking the bare-specifier branch instead.
+
+- The resolver now decodes with `fileURLToPath`. Split out as `tools/lib/stylesheet-path.mjs`
+  so the branch can be tested without a Tailwind install; reverting the one line fails exactly
+  the two tests that target it.
+- **A skipped compile check now names itself.** The headline carries `TAILWIND: <version> | off
+  | UNAVAILABLE`, and an unavailable check prints a warning hoisted directly under the verdict,
+  above the findings, so `printCapped` cannot elide it — it is the one line that must survive,
+  since everything below it is evidence from a check that did not fully run. `--no-tailwind`
+  reports as `off (deliberate)` and is not conflated with a broken one.
+- A test audits a fixture library at a path containing a space.
+
+## [0.4.0] — 2026-09-11
+
 ### Added — a human feedback channel for the design pipeline
 
 The pipeline had two machine inputs to a concept rework (the critic's findings) and no

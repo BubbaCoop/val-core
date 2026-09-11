@@ -46,6 +46,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { parseArgs, fail, printCapped } from "../lib/args.mjs";
 import { resolveReport } from "../lib/report.mjs";
+import { stylesheetPath } from "../lib/stylesheet-path.mjs";
 
 const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-tailwind", "no-write"] });
 const target = positional[0];
@@ -515,7 +516,7 @@ for (const g of groups) {
 // ---- advisory Tailwind compile pass -----------------------------------------------------
 
 async function tailwindCheck() {
-  if (opts["no-tailwind"]) return { checked: false, reason: "--no-tailwind" };
+  if (opts["no-tailwind"]) return { checked: false, requested: true, reason: "--no-tailwind" };
   const root = resolve(opts["tailwind-from"] ?? process.cwd());
   const pkgName = opts.package;
   try {
@@ -530,12 +531,7 @@ async function tailwindCheck() {
     const ds = await tw.__unstable__loadDesignSystem(`@import "tailwindcss"; ${sourceImport}`, {
       base: root,
       loadStylesheet: async (id, base) => {
-        let file;
-        if (id === "tailwindcss") file = join(twDir, "index.css");
-        else if (id.startsWith("tailwindcss/")) file = join(twDir, id.slice("tailwindcss/".length));
-        else if (id.startsWith("file://")) file = new URL(id).pathname;
-        else if (id.startsWith(".") || id.startsWith("/")) file = resolve(base, id);
-        else file = createRequire(join(base, "__resolve__.js")).resolve(id);
+        const file = stylesheetPath(id, { base, twDir });
         return { path: file, base: dirname(file), content: readFileSync(file, "utf8") };
       },
     });
@@ -586,8 +582,16 @@ const dest = resolveReport({ out: opts.out, noWrite: opts["no-write"], defaultPa
 const outPath = dest.path;
 if (outPath) writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
 
+const twState = tailwind.checked ? tailwind.tailwind : tailwind.requested ? "off" : "UNAVAILABLE";
+
 const lines = [];
-lines.push(`CLASS-AUDIT: ${report.verdict} | CLASSES: ${classes.length} | SANCTIONED: ${sanctioned.length} | PLANNED: ${planned.length} | UNSANCTIONED: ${unsanctioned.length} | VIOLATIONS: ${violations.length + issues.length}`);
+lines.push(`CLASS-AUDIT: ${report.verdict} | CLASSES: ${classes.length} | SANCTIONED: ${sanctioned.length} | PLANNED: ${planned.length} | UNSANCTIONED: ${unsanctioned.length} | VIOLATIONS: ${violations.length + issues.length} | TAILWIND: ${twState}`);
+// Hoisted above the findings: an unavailable compile check is the one line that must survive
+// printCapped, because everything below it is evidence from a check that did not fully run.
+if (twState === "UNAVAILABLE") {
+  lines.push(`  TAILWIND UNAVAILABLE — the compile check did not run: ${tailwind.reason}`);
+  lines.push(`              Utilities were classified but never compiled, so a sanctioned class that Tailwind cannot actually build was not caught. This verdict is weaker than it looks; fix the cause or pass --no-tailwind to say the omission is deliberate.`);
+}
 for (const c of violations) lines.push(`  VIOLATION   ${c.cls.padEnd(36)} ${c.reason}  @ ${c.where[0]}${c.where.length > 1 ? ` (+${c.where.length - 1})` : ""}`);
 for (const i of issues) lines.push(`  VIOLATION   ${i.detail.padEnd(36)} ${i.reason}  @ ${i.file}:${i.line}`);
 for (const c of planned) lines.push(`  PLANNED     ${c.cls.padEnd(36)} ${c.source}  @ ${c.where[0]}`);
@@ -595,8 +599,8 @@ if (PLANNED_DIAGNOSTIC) lines.push(`  §12 GAP     ${PLANNED_DIAGNOSTIC} (method
 for (const c of unsanctioned) lines.push(`  UNSANCTIONED ${c.cls.padEnd(35)} ${c.reason}  @ ${c.where[0]}${c.where.length > 1 ? ` (+${c.where.length - 1})` : ""}`);
 if (tailwind.checked) {
   lines.push(`  tailwind ${tailwind.tailwind}: ${tailwind.candidates} sanctioned utilities compiled; ${tailwind.nonCompiling.length} did not${tailwind.nonCompiling.length ? ` → ${tailwind.nonCompiling.join(" ")} (methodology/library defect — report it)` : ""}`);
-} else {
-  lines.push(`  tailwind check skipped: ${tailwind.reason}`);
+} else if (tailwind.requested) {
+  lines.push(`  tailwind check skipped: ${tailwind.reason} (deliberate)`);
 }
 lines.push(outPath ? `  report: ${relative(process.cwd(), outPath)}` : `  report not written: ${dest.reason}`);
 printCapped(lines, 40);

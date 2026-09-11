@@ -333,3 +333,56 @@ test("planned markers with no resolvable interim class warn", () => {
   assert.match(r.stdout, /§12 GAP/);
   assert.match(r.stdout, /marks values .*planned.*but §12 resolved no interim class/);
 });
+
+// ---- a library path containing a space ------------------------------------------------
+
+test("a library whose path contains a space audits normally, and names the tailwind state", () => {
+  // The spaced path is the whole point: the file: URL for library.css percent-encodes, and
+  // the compile check used to vanish into a caught ENOENT while the verdict still said PASS.
+  const base = mkdtempSync(join(tmpdir(), "val-class-audit-"));
+  const dir = join(base, "valiify shortapp library");
+  const lib = join(dir, "lib");
+  mkdirSync(lib, { recursive: true });
+  fixtureLibrary(lib);
+  const pkg = join(dir, "pkg");
+  mkdirSync(pkg, { recursive: true });
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="w-140 mx-auto py-12 flex flex-col gap-10"></div>`);
+
+  // No --no-tailwind: we want the compile branch to be attempted.
+  const r = spawnSync(
+    process.execPath,
+    [TOOL, pkg, "--library", lib, "--methodology", join(lib, "short-app.md"), "--tailwind-from", lib],
+    { encoding: "utf8", cwd: pkg },
+  );
+  assert.match(r.stdout, /CLASS-AUDIT: (PASS|FAIL)/, r.stdout + r.stderr);
+  assert.match(r.stdout, /\| TAILWIND: /, "the headline must always state the tailwind state");
+  assert.doesNotMatch(r.stdout, /%20/, "no percent-encoded path may reach a message");
+});
+
+test("an unavailable tailwind check names itself in the headline and is hoisted above findings", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="w-140 mx-auto py-12"></div>`);
+  // --tailwind-from a directory with no tailwindcss: the check cannot run.
+  const r = spawnSync(
+    process.execPath,
+    [TOOL, pkg, "--library", lib, "--methodology", join(lib, "short-app.md"), "--tailwind-from", pkg],
+    { encoding: "utf8", cwd: pkg },
+  );
+  assert.match(r.stdout, /\| TAILWIND: UNAVAILABLE/);
+  assert.match(r.stdout, /TAILWIND UNAVAILABLE — the compile check did not run/);
+  assert.match(r.stdout, /This verdict is weaker than it looks/);
+  const lines = r.stdout.split("\n");
+  assert.ok(
+    lines.findIndex((l) => /TAILWIND UNAVAILABLE/.test(l)) <= 2,
+    "the warning must sit directly under the verdict so printCapped cannot elide it",
+  );
+});
+
+test("--no-tailwind reports as a deliberate omission, not as unavailable", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="w-140 mx-auto py-12"></div>`);
+  const r = run(pkg, lib);
+  assert.match(r.stdout, /\| TAILWIND: off/);
+  assert.match(r.stdout, /tailwind check skipped: --no-tailwind \(deliberate\)/);
+  assert.doesNotMatch(r.stdout, /UNAVAILABLE/);
+});
