@@ -159,6 +159,10 @@ const substitutions = {
   LIBRARY_PACKAGE:
     library.package ?? "<the library's npm package — set library.package in val/config.json>",
   LIBRARY_ROOT: libraryRoot,
+  // Leading space lives in the value, so an unprefixed library renders a clean command line.
+  CLASS_AUDIT_FLAGS: library.classPrefix
+    ? ` --class-prefix ${library.classPrefix}${library.classSpelling === "strict" ? " --class-strict" : ""}`
+    : "",
   FIGMA_FILE_KEY: library.figmaFileKey,
   DESIGN_SYSTEM_SKILL_PATH: paths.designSystemSkill,
   REGISTRY_PATH: paths.componentRegistry,

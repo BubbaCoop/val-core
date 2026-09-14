@@ -48,6 +48,18 @@
           "type": "string",
           "description": "Optional — the Figma file's title, for prose only."
         },
+        "classPrefix": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The library's class identity, when it has one: component classes are namespaced `<p>-` (.va-btn) and utilities carry the Tailwind v4 prefix `<p>:` (va:flex). Passed to class-audit as --class-prefix. Omit for an unprefixed library.",
+          "examples": ["va"]
+        },
+        "classSpelling": {
+          "type": "string",
+          "enum": ["tolerant", "strict"],
+          "default": "tolerant",
+          "description": "With classPrefix set: 'tolerant' sanctions the pre- and post-rename spellings alike (the migration window); 'strict' rejects the unprefixed spelling. Move to 'strict' once the rename has shipped — leaving it tolerant forever trades one drift problem for another."
+        },
         "package": {
           "type": "string",
           "description": "The npm package name consumers install (e.g. @valiify/shortapp-ui). Used by the design pipeline for @import lines and node_modules paths.",

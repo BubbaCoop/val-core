@@ -11,6 +11,42 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-14
+
+### Added — `--class-prefix`, so a library can rename its class vocabulary without deadlocking
+
+A library whose component classes collide with whatever the host app loads (Tailwind's own
+utilities, or another component library's `.btn` / `.modal` / `.badge`) has to namespace them.
+It cannot do that in one atomic step: `class-audit` would reject `va:flex` before the rename
+lands, and reject `flex` after it, so whichever repo moves first is broken until the other
+catches up.
+
+`class-audit` now takes `--class-prefix <id>`. It names one identity spelling both halves —
+component classes namespaced `.<id>-btn`, utilities carrying the Tailwind v4 prefix
+`<id>:flex` (which leads any variant: `<id>:md:w-full`). With it set, **both** the prefixed
+and unprefixed spellings are sanctioned; that tolerant window is what lets the two repos move
+independently. `--class-strict` closes the window by rejecting the unprefixed spelling, and is
+refused without `--class-prefix` rather than silently permitting everything.
+
+Three details that are easy to get wrong, so they are tested:
+
+- The prefix is consumed before variant parsing. Without that, `va:flex` reads as an unknown
+  variant `va:` and is a violation, which is exactly the deadlock.
+- Forbidden components stay forbidden under **both** spellings, so a rename cannot smuggle one
+  past a surface profile's §10 list.
+- The advisory Tailwind pass compiles the **unprefixed** candidate. The design system it loads
+  comes from the library's `/source` entry, which is not prefixed — the prefix namespaces a
+  prebuilt bundle's output, it does not change which utility a candidate names.
+
+Config: optional `library.classPrefix` and `library.classSpelling` (`tolerant` | `strict`,
+default `tolerant`), rendered into the five generated `class-audit` invocations. A library
+that sets neither is unaffected — the flag is absent and classification is byte-for-byte what
+it was.
+
+`skills/design-methodology/SKILL.md` §12 gained the rule generically: agents read the prefix
+off the `class-audit` command in their own instructions rather than assuming one.
+
+
 ### Fixed — the Tailwind compile check vanished silently in any path containing a space
 
 `class-audit` built its library import as a `file:` URL and the stylesheet resolver read the

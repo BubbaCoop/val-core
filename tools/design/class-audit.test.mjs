@@ -386,3 +386,150 @@ test("--no-tailwind reports as a deliberate omission, not as unavailable", () =>
   assert.match(r.stdout, /tailwind check skipped: --no-tailwind \(deliberate\)/);
   assert.doesNotMatch(r.stdout, /UNAVAILABLE/);
 });
+
+// ---- class identity: the rename tolerance window -----------------------------------------
+// A library renaming its vocabulary (.btn -> .va-btn, flex -> va:flex) cannot do it in one
+// atomic step across two repos: the audit would reject the new spelling before the rename
+// lands, and the old one after. --class-prefix opens a window where BOTH are sanctioned;
+// --class-strict closes it again once the rename has shipped.
+
+/** Library whose component classes are already namespaced. */
+function renamedFixtureLibrary(root) {
+  fixtureLibrary(root);
+  writeFileSync(
+    join(root, "src", "components", "button.css"),
+    `@layer components {
+  .va-btn { @apply flex h-12; }
+  .va-btn-primary, .va-btn-secondary { @apply rounded-sm; }
+}`,
+  );
+}
+
+test("tolerant window: both spellings are sanctioned, for every registration path", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(
+    join(pkg, "Page.svelte"),
+    `<div class="flex va:flex mx-auto va:mx-auto md:w-full va:md:w-full">
+  <button class="btn btn-primary va-btn va-btn-primary">x</button>
+  <p class="type-eyebrow va:type-eyebrow focus-ring va:focus-ring">y</p>
+  <h1 class="text-display va:text-display rounded-md va:rounded-md w-140 va:w-140">t</h1>
+</div>`,
+  );
+  const r = run(pkg, lib, ["--class-prefix", "va"]);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(report.verdict, "PASS");
+  assert.equal(report.rules.classSpelling, "tolerant");
+
+  // component — namespaced and bare, against a library that still defines `.btn`
+  assert.equal(kindOf(report, "btn"), "component");
+  assert.equal(kindOf(report, "va-btn"), "component");
+  assert.equal(kindOf(report, "btn-primary"), "component");
+  assert.equal(kindOf(report, "va-btn-primary"), "component");
+  // utility — the two registration paths differ (@utility in themes vs utilities), so a
+  // sanctioning bug can hit one and not the other. Assert both.
+  assert.equal(kindOf(report, "type-eyebrow"), "utility");
+  assert.equal(kindOf(report, "va:type-eyebrow"), "utility");
+  assert.equal(kindOf(report, "focus-ring"), "utility");
+  assert.equal(kindOf(report, "va:focus-ring"), "utility");
+  // token / structural / cited, prefixed and bare
+  assert.equal(kindOf(report, "text-display"), "token");
+  assert.equal(kindOf(report, "va:text-display"), "token");
+  assert.equal(kindOf(report, "rounded-md"), "token");
+  assert.equal(kindOf(report, "va:rounded-md"), "token");
+  assert.equal(kindOf(report, "flex"), "structural");
+  assert.equal(kindOf(report, "va:flex"), "structural");
+  assert.equal(kindOf(report, "w-140"), "cited");
+  assert.equal(kindOf(report, "va:w-140"), "cited");
+  // the prefix leads a variant: va:md:w-full, not md:va:w-full
+  assert.equal(kindOf(report, "md:w-full"), "structural");
+  assert.equal(kindOf(report, "va:md:w-full"), "structural");
+});
+
+test("tolerant window: a renamed library still sanctions the old spelling", () => {
+  const { dir, pkg } = setup();
+  const lib = join(dir, "renamed");
+  renamedFixtureLibrary(lib);
+  writeFileSync(join(pkg, "Page.svelte"), `<button class="va-btn va-btn-primary btn btn-primary">x</button>`);
+  const r = run(pkg, lib, ["--class-prefix", "va"]);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(kindOf(report, "va-btn"), "component");
+  assert.equal(kindOf(report, "va-btn-primary"), "component");
+  assert.equal(kindOf(report, "btn"), "component", "the pre-rename spelling stays sanctioned in the window");
+  assert.equal(kindOf(report, "btn-primary"), "component");
+});
+
+test("--class-strict closes the window: the old spelling becomes unsanctioned", () => {
+  const { dir, pkg } = setup();
+  const lib = join(dir, "renamed");
+  renamedFixtureLibrary(lib);
+  writeFileSync(
+    join(pkg, "Page.svelte"),
+    `<div class="va:flex flex">
+  <button class="va-btn btn">x</button>
+  <p class="va:focus-ring focus-ring">y</p>
+</div>`,
+  );
+  const r = run(pkg, lib, ["--class-prefix", "va", "--class-strict"]);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(report.rules.classSpelling, "strict");
+
+  assert.equal(kindOf(report, "va-btn"), "component");
+  assert.equal(kindOf(report, "va:flex"), "structural");
+  assert.equal(kindOf(report, "va:focus-ring"), "utility");
+
+  assert.equal(kindOf(report, "btn"), "unsanctioned");
+  assert.equal(kindOf(report, "flex"), "unsanctioned");
+  assert.equal(kindOf(report, "focus-ring"), "unsanctioned");
+  // the message has to say what to write, not just that it is wrong
+  const btn = report.classes.find((c) => c.cls === "btn");
+  assert.match(btn.reason, /va-btn/);
+  const flex = report.classes.find((c) => c.cls === "flex");
+  assert.match(flex.reason, /va:flex/);
+});
+
+test("a forbidden component stays forbidden under either spelling", () => {
+  const { dir, pkg } = setup();
+  const lib = join(dir, "forbid");
+  fixtureLibrary(lib);
+  writeFileSync(
+    join(lib, "src", "components", "avatar.css"),
+    `@layer components { .avatar { @apply flex; } }`,
+  );
+  writeFileSync(
+    join(lib, "short-app.md"),
+    `${readFileSync(join(lib, "short-app.md"), "utf8")}
+## 10. Scope
+Shipped components that no in-scope frame uses: \`.avatar\`.`,
+  );
+  writeFileSync(join(pkg, "Page.svelte"), `<span class="avatar va-avatar">x</span>`);
+  const r = run(pkg, lib, ["--class-prefix", "va"]);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(kindOf(report, "avatar"), "violation");
+  assert.equal(
+    kindOf(report, "va-avatar"),
+    "violation",
+    "renaming must not smuggle a forbidden component past the surface profile",
+  );
+});
+
+test("without --class-prefix the prefix is not special — default behaviour is unchanged", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="va:flex">x</div>`);
+  const r = run(pkg, lib);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(report.rules.classSpelling, "none");
+  assert.equal(kindOf(report, "va:flex"), "violation", "reads as an unknown variant, as before");
+});
+
+test("--class-strict without --class-prefix is refused rather than silently permissive", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="flex">x</div>`);
+  const r = run(pkg, lib, ["--class-strict"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--class-strict requires --class-prefix/);
+});

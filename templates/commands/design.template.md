@@ -92,7 +92,7 @@ Check: both viewports present in `02-concept/concept.v1.html`; concept.md
 has the mapping and copy tables; its class-audit reported PASS (re-run
 `node {{TOOLS_DIR}}/design/class-audit.mjs 02-concept/concept.v1.html
 --library {{LIBRARY_ROOT}} --methodology <methodology> --tailwind-from .
---package {{LIBRARY_PACKAGE}}` yourself — it costs no model tokens). On
+--package {{LIBRARY_PACKAGE}}{{CLASS_AUDIT_FLAGS}}` yourself — it costs no model tokens). On
 `CONCEPT: BLOCKED` → Clarification protocol, then re-invoke the architect
 with a pointer to the answers file.
 

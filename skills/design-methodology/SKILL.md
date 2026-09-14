@@ -231,6 +231,9 @@ Attributes:
 - `data-class` — every library class / sanctioned utility the block will use,
   space-separated, component classes with a leading dot. `class-audit`
   checks each one; the build's element for this block must use a superset.
+  **Apply the library's class identity here if it has one** — see §12. The
+  examples above are written unprefixed; a library with an identity spells the
+  same blocks `.va-btn`, `va:flex`.
 - `data-methodology` — the §s that determine this block.
 - `data-states` — the states this block has (from §6); each must be reachable
   in the build via a prop.
@@ -414,6 +417,24 @@ HANDOFF.md §7/§8 so the dev team knows what to swap, and the verifier fails a
 planned value written any other way.
 
 ## 12. Class discipline (what `class-audit` enforces)
+
+**Class identity.** Some libraries namespace their vocabulary so it cannot
+collide with whatever the host app already loads (Tailwind's own utilities, or
+another component library's `.btn` / `.modal` / `.badge`). When the
+`class-audit` command in your instructions carries `--class-prefix <p>`, that
+library has one, and every class you write takes it:
+
+- component classes are namespaced — `.btn` → `.<p>-btn`, `.text-field-input` →
+  `.<p>-text-field-input`
+- utilities carry the Tailwind v4 prefix, which **leads** any variant —
+  `flex` → `<p>:flex`, `md:w-full` → `<p>:md:w-full`
+- the library's own `@utility` names take it too — `<p>:focus-ring`,
+  `<p>:type-eyebrow`
+
+Read the prefix off that command rather than assuming: a library without one
+writes classes bare, and `--class-prefix` is absent. While a library is
+migrating, the audit accepts both spellings; once its instructions also carry
+`--class-strict`, the unprefixed spelling is rejected.
 
 A class is **sanctioned** only if it is one of: a selector in
 `src/components/*.css`; an `@utility`; a token utility that derives from a

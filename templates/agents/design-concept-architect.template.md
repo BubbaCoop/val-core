@@ -145,7 +145,7 @@ Open questions (clarification format with TRIGGER) · Methodology rules
 applied · Unsure.
 
 Then run, once:
-  node {{TOOLS_DIR}}/design/class-audit.mjs 02-concept/concept.v<n>.html --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}
+  node {{TOOLS_DIR}}/design/class-audit.mjs 02-concept/concept.v<n>.html --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}{{CLASS_AUDIT_FLAGS}}
 Every class in every `data-class` must be sanctioned (PASS). An UNSANCTIONED
 class is not "close enough": either the methodology cites it (add the § to
 `data-methodology`) or the block needs the methodology's composition — or it

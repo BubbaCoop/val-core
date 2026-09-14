@@ -18,7 +18,7 @@ contains came from the approved concept and the library, and nothing else.
 
 Run both tools before reading anything:
 
-  node {{TOOLS_DIR}}/design/class-audit.mjs 05-package --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}
+  node {{TOOLS_DIR}}/design/class-audit.mjs 05-package --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}{{CLASS_AUDIT_FLAGS}}
   node {{TOOLS_DIR}}/design/handoff-check.mjs <run-dir> --sprite {{ICON_SPRITE}}
 
 Between them they settle: approval hash, Svelte compilation, block coverage

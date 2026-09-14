@@ -40,7 +40,7 @@ an external design system.
 Run the audit yourself before reading anything closely — it is free and it
 tells you where to look:
 
-  node {{TOOLS_DIR}}/design/class-audit.mjs 02-concept/concept.v<n>.html --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}
+  node {{TOOLS_DIR}}/design/class-audit.mjs 02-concept/concept.v<n>.html --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}{{CLASS_AUDIT_FLAGS}}
 
 Any VIOLATION or UNSANCTIONED class is a blocking finding, quoted verbatim
 with the tool's reason. A PLANNED class is correct only if concept.md's

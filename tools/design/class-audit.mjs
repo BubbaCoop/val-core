@@ -20,10 +20,18 @@
  * a token), <style>, style=, style: directives, @apply, .css files, external
  * design systems, class= attributes inside a concept wireframe.
  *
+ * Class identity (--class-prefix): a library may namespace its component classes
+ * and prefix its utilities with one identity — Valiify uses `.va-btn` + `va:flex`.
+ * Naming it here makes the audit read both halves. Without --class-strict BOTH
+ * spellings are sanctioned; that tolerant window is what lets a library rename its
+ * vocabulary without deadlocking, since the audit would otherwise reject `va:flex`
+ * before the rename lands and `flex` after it. Pass --class-strict once the rename
+ * has shipped — leaving it off permanently trades one drift problem for another.
+ *
  * Usage:
  *   node <tools-dir>/design/class-audit.mjs <dir-or-file> --library <root> --methodology <md>
  *        [--claude-md <path>] [--tailwind-from <consumer-root>] [--package <npm-name>]
- *        [--out <json>] [--no-tailwind]
+ *        [--class-prefix <id>] [--class-strict] [--out <json>] [--no-tailwind]
  *
  * Surface rules come from the methodology and the theme themselves — nothing is
  * duplicated elsewhere:
@@ -48,7 +56,7 @@ import { parseArgs, fail, printCapped } from "../lib/args.mjs";
 import { resolveReport } from "../lib/report.mjs";
 import { stylesheetPath } from "../lib/stylesheet-path.mjs";
 
-const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-tailwind", "no-write"] });
+const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-tailwind", "no-write", "class-strict"] });
 const target = positional[0];
 if (!target || !opts.library || !opts.methodology) {
   fail(
@@ -62,6 +70,28 @@ if (!existsSync(libRoot)) fail(`Library root not found: ${opts.library}`);
 const methodologyPath = resolve(opts.methodology);
 if (!existsSync(methodologyPath)) fail(`Methodology not found: ${opts.methodology}`);
 const claudeMdPath = resolve(opts["claude-md"] ?? join(libRoot, "CLAUDE.md"));
+
+// ---- library class identity (migration-aware) --------------------------------------------
+// One identity spells both halves: components are namespaced (`.va-btn`), utilities are
+// prefixed Tailwind-v4 style (`va:flex`, and the prefix leads: `va:hover:flex`).
+const CLASS_PREFIX = opts["class-prefix"] ?? null;
+const CLASS_NS = CLASS_PREFIX ? `${CLASS_PREFIX}-` : null;
+const CLASS_STRICT = Boolean(opts["class-strict"]);
+if (CLASS_PREFIX !== null && !/^[a-z][a-z0-9-]*$/.test(CLASS_PREFIX)) {
+  fail(`--class-prefix must be a bare identifier (e.g. va), got "${CLASS_PREFIX}"`);
+}
+if (CLASS_STRICT && !CLASS_PREFIX) fail("--class-strict requires --class-prefix");
+
+/** Both spellings of a component class: `btn` and `va-btn`. */
+function nsForms(base) {
+  if (!CLASS_NS) return [base];
+  return base.startsWith(CLASS_NS) ? [base, base.slice(CLASS_NS.length)] : [base, CLASS_NS + base];
+}
+const hasNs = (set, base) => nsForms(base).some((b) => set.has(b));
+const getNs = (map, base) => {
+  for (const b of nsForms(base)) if (map.has(b)) return map.get(b);
+  return undefined;
+};
 
 // ---- surface rules read from the methodology + theme -------------------------------------
 const METHODOLOGY_MD = readFileSync(methodologyPath, "utf8");
@@ -218,7 +248,8 @@ function citedClasses(mdPath) {
   const md = withoutSection12(readFileSync(mdPath, "utf8"));
   const add = (tok) => {
     let t = tok.trim().replace(/^\./, "").replace(/[,;:)]+$/, "");
-    if (/^[a-z][a-z0-9-]*:/.test(t)) t = t.replace(/^[a-z][a-z0-9-]*:/, ""); // md:w-full → w-full
+    // va:md:w-full → w-full. Loop, so a prefix in front of a variant is not left behind.
+    while (/^[a-z][a-z0-9-]*:/.test(t)) t = t.replace(/^[a-z][a-z0-9-]*:/, "");
     if (CLASS_SHAPE.test(t)) out.add(t);
   };
   for (const m of md.matchAll(/`([^`\n]+)`/g)) for (const tok of m[1].split(/\s+/)) add(tok);
@@ -321,14 +352,21 @@ function deriveToken(base) {
 function splitVariants(cls) {
   const variants = [];
   let rest = cls;
+  // Tailwind v4 writes the library prefix first and variant-like (va:hover:flex), so it is
+  // consumed here rather than falling through to ALLOWED_VARIANTS as an unknown variant.
+  let prefixed = false;
+  if (CLASS_PREFIX && rest.startsWith(CLASS_PREFIX + ":")) {
+    prefixed = true;
+    rest = rest.slice(CLASS_PREFIX.length + 1);
+  }
   for (;;) {
-    if (rest.startsWith("[")) return { variants, base: rest, arbitraryVariant: true };
+    if (rest.startsWith("[")) return { variants, base: rest, arbitraryVariant: true, prefixed };
     const m = rest.match(/^([a-z][a-z0-9-]*(?:-\[[^\]]+\])?):(.+)$/);
     if (!m) break;
     variants.push(m[1]);
     rest = m[2];
   }
-  return { variants, base: rest, arbitraryVariant: false };
+  return { variants, base: rest, arbitraryVariant: false, prefixed };
 }
 
 function hardViolation(cls, base) {
@@ -346,19 +384,21 @@ function hardViolation(cls, base) {
   return null;
 }
 
-function classify(cls) {
+function classifyInner(cls) {
   const { variants, base, arbitraryVariant } = splitVariants(cls);
   if (arbitraryVariant) return { kind: "violation", reason: "arbitrary variant" };
   for (const v of variants) {
     if (!ALLOWED_VARIANTS.has(v)) return { kind: "violation", reason: `variant "${v}:" is not sanctioned (md:, hover:, focus-visible:, disabled: …)` };
   }
-  if (PLANNED.has(base)) {
-    const p = PLANNED.get(base);
-    return { kind: "planned", source: `${p.ref ?? "§12"} · ${p.value ?? ""}`.trim() };
+  const plannedHit = getNs(PLANNED, base);
+  if (plannedHit) {
+    return { kind: "planned", source: `${plannedHit.ref ?? "§12"} · ${plannedHit.value ?? ""}`.trim() };
   }
-  if (FORBIDDEN.has(base)) return { kind: "violation", reason: "forbidden by the surface profile" };
+  // Namespace-tolerant on purpose: a forbidden component stays forbidden under either
+  // spelling, so a rename cannot smuggle one past the surface profile.
+  if (hasNs(FORBIDDEN, base)) return { kind: "violation", reason: "forbidden by the surface profile" };
 
-  if (COMPONENT.has(base)) return { kind: "component", source: "src/components" };
+  if (hasNs(COMPONENT, base)) return { kind: "component", source: "src/components" };
   if (UTILITY.has(base)) return { kind: "utility", source: "@utility" };
 
   const token = /\/\d/.test(base) ? null : deriveToken(base);
@@ -392,6 +432,25 @@ function classify(cls) {
     return { kind: "unsanctioned", reason: "no theme token behind this utility (Tailwind default palette / scale)" };
   }
   return { kind: "unsanctioned", reason: "not a library class, token utility, or sanctioned layout utility" };
+}
+
+/**
+ * Spelling gate. The tolerant window (no --class-strict) accepts the pre- and
+ * post-rename spellings alike; --class-strict closes it by rejecting the old one.
+ * Kind is decided first so the message can say what the class IS, not just that it
+ * looked wrong.
+ */
+function classify(cls) {
+  const r = classifyInner(cls);
+  if (!CLASS_PREFIX || !CLASS_STRICT) return r;
+  const { base, prefixed } = splitVariants(cls);
+  if (r.kind === "component" && !base.startsWith(CLASS_NS)) {
+    return { kind: "unsanctioned", reason: `component classes are namespaced \`${CLASS_NS}\` — write ${CLASS_NS}${base}` };
+  }
+  if (["utility", "token", "structural", "cited", "arbitrary"].includes(r.kind) && !prefixed) {
+    return { kind: "unsanctioned", reason: `utilities carry the \`${CLASS_PREFIX}:\` prefix — write ${CLASS_PREFIX}:${cls}` };
+  }
+  return r;
 }
 
 // ---- extraction -------------------------------------------------------------------
@@ -536,7 +595,14 @@ async function tailwindCheck() {
       },
     });
     const list = sanctioned.filter((c) => !["component"].includes(c.kind)).map((c) => c.cls);
-    const css = ds.candidatesToCss(list);
+    // The design system here is loaded from the library's /source entry, which is NOT
+    // prefixed — the prefix namespaces the prebuilt bundle's output, it does not change
+    // which utility a candidate names. So compile the unprefixed spelling and report the
+    // failure under the spelling the page actually wrote.
+    const candidates = CLASS_PREFIX
+      ? list.map((c) => (c.startsWith(CLASS_PREFIX + ":") ? c.slice(CLASS_PREFIX.length + 1) : c))
+      : list;
+    const css = ds.candidatesToCss(candidates);
     const nonCompiling = list.filter((_, i) => css[i] === null);
     return { checked: true, tailwind: JSON.parse(readFileSync(twPkgPath, "utf8")).version, candidates: list.length, nonCompiling };
   } catch (err) {
@@ -554,6 +620,9 @@ const report = {
     forbidden: [...FORBIDDEN],
     planned: [...PLANNED.values()].map((p) => p.class),
     monoTokens: [...MONO_TOKENS],
+    classPrefix: CLASS_PREFIX,
+    classNamespace: CLASS_NS,
+    classSpelling: CLASS_PREFIX ? (CLASS_STRICT ? "strict" : "tolerant") : "none",
     ...(PLANNED_DIAGNOSTIC ? { plannedDiagnostic: PLANNED_DIAGNOSTIC } : {}),
   },
   files: files.map((f) => relative(process.cwd(), f)),
@@ -585,7 +654,7 @@ if (outPath) writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
 const twState = tailwind.checked ? tailwind.tailwind : tailwind.requested ? "off" : "UNAVAILABLE";
 
 const lines = [];
-lines.push(`CLASS-AUDIT: ${report.verdict} | CLASSES: ${classes.length} | SANCTIONED: ${sanctioned.length} | PLANNED: ${planned.length} | UNSANCTIONED: ${unsanctioned.length} | VIOLATIONS: ${violations.length + issues.length} | TAILWIND: ${twState}`);
+lines.push(`CLASS-AUDIT: ${report.verdict} | CLASSES: ${classes.length} | SANCTIONED: ${sanctioned.length} | PLANNED: ${planned.length} | UNSANCTIONED: ${unsanctioned.length} | VIOLATIONS: ${violations.length + issues.length} | TAILWIND: ${twState}${CLASS_PREFIX ? ` | PREFIX: ${CLASS_PREFIX} (${CLASS_STRICT ? "strict" : "tolerant"})` : ""}`);
 // Hoisted above the findings: an unavailable compile check is the one line that must survive
 // printCapped, because everything below it is evidence from a check that did not fully run.
 if (twState === "UNAVAILABLE") {

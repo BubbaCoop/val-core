@@ -97,7 +97,7 @@ Rules that the verifier will check mechanically, so get them right first:
 
 Run, once each:
 
-  node {{TOOLS_DIR}}/design/class-audit.mjs 05-package --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}
+  node {{TOOLS_DIR}}/design/class-audit.mjs 05-package --library {{LIBRARY_ROOT}} --methodology <methodology path> --tailwind-from . --package {{LIBRARY_PACKAGE}}{{CLASS_AUDIT_FLAGS}}
   node {{TOOLS_DIR}}/design/handoff-check.mjs <run-dir> --sprite {{ICON_SPRITE}}
 
 Both must pass. Read their reports, fix, re-run. Do not finish on FAIL and do
