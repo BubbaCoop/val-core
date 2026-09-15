@@ -71,6 +71,7 @@ const schema = JSON.parse(
 const raw = JSON.parse(readFileSync(configPath, "utf8"));
 const config = applyDefaults(raw, schema);
 validate(config, schema);
+checkClassIdentity(config.library);
 
 // ---- substitutions ------------------------------------------------------------
 
@@ -339,6 +340,34 @@ function isDanglingLink(p) {
   }
 }
 
+/**
+ * classPrefix and classSpelling stand or fall together.
+ *
+ * classSpelling has no schema default on purpose: a weakened gate must never be implicit, so
+ * a library that declares a prefix has to say which spelling it enforces. The reverse
+ * direction mirrors class-audit's own `--class-strict requires --class-prefix` refusal —
+ * without it that guard is bypassable through config, where the flag renders as nothing at
+ * all and the omission is silent.
+ */
+function checkClassIdentity(library) {
+  const { classPrefix, classSpelling } = library;
+  if (classPrefix && classSpelling === undefined) {
+    fail(
+      `library.classSpelling is required when library.classPrefix is set (it is "${classPrefix}").\n` +
+        `  There is no default — the gate state has to be stated outright:\n` +
+        `    "strict"    reject the unprefixed spelling; the rename has shipped\n` +
+        `    "tolerant"  sanction both spellings, for the duration of a rename only`,
+    );
+  }
+  if (classSpelling !== undefined && !classPrefix) {
+    fail(
+      `library.classPrefix is required when library.classSpelling is set (it is "${classSpelling}").\n` +
+        `  With no prefix there is no spelling to enforce and the class-audit flags render as\n` +
+        `  nothing. Set library.classPrefix (e.g. "va"), or drop library.classSpelling.`,
+    );
+  }
+}
+
 /** Fill in `default`s from a (simple, nested-object) JSON schema. */
 function applyDefaults(value, node) {
   if (node.type !== "object" || !node.properties) return value;
@@ -361,6 +390,13 @@ function applyDefaults(value, node) {
 function validate(value, node, path = "config") {
   const errors = [];
   (function walk(v, n, p) {
+    // enum is type-independent, so it is checked before the type dispatch. Without this the
+    // validator accepted "Strict", which then failed the === "strict" test below and rendered
+    // a TOLERANT command line — a config that said the window was shut while it was open.
+    if (n.enum && !n.enum.includes(v)) {
+      errors.push(`${p}: ${JSON.stringify(v)} is not one of ${n.enum.map((e) => JSON.stringify(e)).join(" | ")}`);
+      return;
+    }
     if (n.type === "object") {
       if (typeof v !== "object" || v === null || Array.isArray(v)) {
         errors.push(`${p}: expected object`);

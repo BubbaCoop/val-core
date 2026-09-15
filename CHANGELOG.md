@@ -11,6 +11,65 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-09-15
+
+### Changed — `library.classSpelling` has no default; a prefixed library must declare its gate state
+
+0.5.0 gave `classSpelling` the default `"tolerant"`. That was the wrong shape for the
+decision. `classSpelling` records whether a *consumer library's* rename has shipped — a fact
+only that library knows — so defaulting it made val-core assert, on every consumer's behalf,
+that theirs had not. A library that set `classPrefix` and never thought about spelling sat in
+a permanently weakened gate, which is exactly the drift the key's own description warns
+against, and nothing failed to say so: `PREFIX: va (tolerant)` is a label in the headline, and
+labels do not get acted on.
+
+The default is gone. `classSpelling` is now **required whenever `classPrefix` is set**, and
+**refused when `classPrefix` is absent**. Neither gate state can be reached implicitly: you
+cannot end up tolerant by forgetting, nor strict by upgrading. `val-init` fails with a message
+naming the key at fault and, for the missing-spelling case, stating what each value means —
+which is why this is a hand-written check rather than a schema keyword.
+
+The reverse direction matters on its own. `class-audit` has always refused `--class-strict`
+without `--class-prefix`; going through config instead rendered *no flags at all*, silently.
+A config could declare `"classSpelling": "strict"` and enforce nothing.
+
+Migrating: a library already carrying `classPrefix` adds `classSpelling` — `"strict"` if its
+rename has shipped, `"tolerant"` if it is still in the window. A library with neither key is
+unaffected; the flags are absent and classification is byte-for-byte what it was.
+
+### Fixed — a miscased `classSpelling` silently rendered a *tolerant* command line
+
+`val-init`'s hand-rolled validator enforced `required`, `additionalProperties`, string
+`pattern`, booleans and arrays — but never `enum`. `"classSpelling": "Strict"` passed
+validation, then failed the `=== "strict"` comparison that builds the flags, and generated
+agents that ran `class-audit` with the window still open. The config said the window was shut
+while it was open, and every downstream gate inherited the weaker check. `enum` is now
+enforced for every schema value that declares one, and the error quotes the offending value
+alongside the legal ones.
+
+### Changed — the shortapp-ui example declares the `va` identity, strict
+
+`val.config.example.json` now carries `"classPrefix": "va"` and `"classSpelling": "strict"`,
+matching shipped shortapp-ui 1.0.0, so the five generated `class-audit` invocations render
+`--class-prefix va --class-strict`. This is the example only: **a library repo does not
+inherit it.** Each consumer sets the two keys in its own `val/config.json` and reruns
+`npx val-init`.
+
+### Changed — the class-identity tests weigh the closed window, not the open one
+
+The 0.5.0 suite asserted tolerance across every registration path while the strict case
+checked three classes. That weighting was backwards — strict is the state a shipped library
+runs in, and an assertion that only checks the prefixed spelling passes just as well with
+tolerance still on. The per-path matrix (component, `@utility` from both `src/themes` and
+`src/utilities`, token, structural, cited, prefix-leading-a-variant) now asserts the prefixed
+form sanctioned **and the bare form rejected**, with the rejection required to name the
+replacement. One compact test keeps the tolerant window covered, since it is still the CLI
+default and a declarable config value.
+
+`tools/val-init.test.mjs` is new: the config→flags path had no coverage at all, so nothing
+checked that `classSpelling` reached the command line, or that the refusals are distinguishable
+from one another rather than collapsing into one generic "invalid config".
+
 ## [0.5.0] — 2026-09-14
 
 ### Added — `--class-prefix`, so a library can rename its class vocabulary without deadlocking

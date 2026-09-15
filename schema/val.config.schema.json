@@ -57,8 +57,7 @@
         "classSpelling": {
           "type": "string",
           "enum": ["tolerant", "strict"],
-          "default": "tolerant",
-          "description": "With classPrefix set: 'tolerant' sanctions the pre- and post-rename spellings alike (the migration window); 'strict' rejects the unprefixed spelling. Move to 'strict' once the rename has shipped — leaving it tolerant forever trades one drift problem for another."
+          "description": "REQUIRED when classPrefix is set, and rejected without it. There is deliberately no default: a weakened gate must never be implicit. 'strict' rejects the unprefixed spelling and is what a library runs once its rename has shipped; 'tolerant' sanctions the pre- and post-rename spellings alike, and is for the duration of a rename only — leaving it tolerant forever trades one drift problem for another. Rendered into the generated class-audit commands as --class-strict when 'strict'."
         },
         "package": {
           "type": "string",
