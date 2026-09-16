@@ -11,6 +11,26 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-09-16
+
+### Added — `handoff-check` fails unmeasured rendering claims
+
+A generated HANDOFF.md told a dev team the consumer library's prebuilt bundle "renders
+identically" to `/source`. Nobody had loaded that entry; the page-builder wrote the sentence
+freehand; it was false (the 1.0.0 bundle sat in `@layer components` and lost to the host's
+unlayered reset), and the team built on it. A generated deliverable asserting a rendering
+outcome nobody measured is a pipeline defect, not a wording slip, so the fix is for the class:
+
+- `tools/design/handoff-check.mjs` fails (`handoff`) on the phrase class — "renders
+  identically", "pixel-identical", "looks the same with/without", "no visual difference" — in
+  HANDOFF.md and in package `.svelte`/`.js`/`.ts` comments. A negation ("does NOT render
+  identically") and a line citing a measurement ("measured", "verified") pass: those are the
+  correction and the evidence.
+- `design-page-builder` rule 8: the load path names the entry the host uses and cites the
+  library's documented contract; it claims nothing about other entries.
+- `design-handoff-verifier`: a new judgement bullet — the verifier owns the paraphrases the
+  regex cannot.
+
 ## [0.6.0] — 2026-09-15
 
 ### Changed — `library.classSpelling` has no default; a prefixed library must declare its gate state

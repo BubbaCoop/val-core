@@ -58,6 +58,14 @@ Read the approved concept, `concept.md`, `contract.json`, `mapping.md`,
   `contract.json`, deviations and omitted component parts are recorded,
   library gaps are named as upstream work, and the open-questions section
   carries what the dev team must still decide.
+- **No unmeasured rendering claims.** HANDOFF.md describes the load path
+  the run used and quotes the library's documented contract for that entry.
+  It never asserts how the page would render under an entry nobody loaded —
+  "renders identically", "looks the same without Tailwind". `handoff-check`
+  fails the phrase class; you own the paraphrases. A generated deliverable
+  stating an unverified rendering outcome is a pipeline defect, not a wording
+  slip: a real handoff said the prebuilt bundle rendered identically to
+  `/source`, nobody had measured it, it did not, and the dev team built on it.
 - **Responsive.** Every viewport the surface defines is implemented with the
   breakpoint the methodology names.
 

@@ -362,6 +362,18 @@ if (contract && (contract.icons ?? []).length) {
 
 // ---- 8/9. files + HANDOFF -------------------------------------------------------------------
 
+// Rendering claims. A handoff may describe the load path the run used; it may NOT assert how
+// the page renders under one it did not measure. A real handoff told the dev team the prebuilt
+// bundle "renders identically" to /source — nobody had loaded it, and it did not — and the
+// team built on the sentence. The builder writes prose freehand, so the phrase class is gated
+// here and the verifier owns the paraphrases. A negation ("does NOT render identically") is the
+// correction, not the claim, and a line that cites a measurement is evidence, not a claim.
+const CLAIMS = [/renders?\s+identical/i, /pixel[- ]identical/i, /identical(ly)?\s+(render|look|appear)/i, /looks?\s+the\s+same\s+(with|without)\b/i, /no\s+visual\s+difference/i];
+const claimLines = (text) =>
+  text.split("\n").map((l, i) => [i + 1, l]).filter(([, l]) =>
+    CLAIMS.some((re) => re.test(l)) && !/\b(not|never|n't)\b/i.test(l) && !/\b(measured|verified)\b/i.test(l));
+const CLAIM_FIX = "state the library's documented contract for the entry the host uses and cite it, or cite the measurement — a sentence about how something renders is a measurement, not prose";
+
 for (const f of ["mapping.md", "contract.json", "HANDOFF.md"]) {
   if (!existsSync(join(pkgDir, f))) fatal("files", `${f} is missing from the package`);
 }
@@ -378,6 +390,7 @@ if (existsSync(handoffPath)) {
   ];
   const headings = handoff.split("\n").filter((l) => /^#{1,3} /.test(l)).join("\n");
   for (const re of required) if (!re.test(headings)) fatal("handoff", `HANDOFF.md has no section matching ${re}`);
+  for (const [n, l] of claimLines(handoff)) fatal("handoff", `HANDOFF.md:${n} asserts a rendering outcome the run did not measure: "${l.trim().slice(0, 100)}"`, CLAIM_FIX);
 }
 
 // ---- mapping: file:line references ---------------------------------------------------------
@@ -465,6 +478,7 @@ for (const f of pkgFiles.filter((f) => [".svelte", ".css", ".js", ".ts"].include
     fatal("shell", `${rel} loads the icon sprite — the sprite is inlined once at the shell (+layout.svelte)`);
   }
   if (extname(f) === ".css") fatal("shell", `${rel}: the package carries no stylesheets`);
+  for (const [n, l] of claimLines(text)) fatal("handoff", `${rel}:${n} asserts a rendering outcome the run did not measure: "${l.trim().slice(0, 100)}"`, CLAIM_FIX);
 }
 
 // ---- report ----------------------------------------------------------------------------------

@@ -92,6 +92,11 @@ Rules that the verifier will check mechanically, so get them right first:
 6. No `<style>`, no `style=`, no `style:`, no `.css` file, no `@apply`.
 7. No load path and no sprite loading inside the package — those live at the
    app shell (skill §11). Pages reference `<use href="#icon">` only.
+8. HANDOFF.md's load path names the entry the host uses and cites the
+   library's documented contract for it ({{LIBRARY_ROOT}}/GETTING_STARTED.md,
+   README). It claims nothing about how the page renders under any other entry
+   — "renders identically" is a measurement, and this pipeline has not made
+   it. `handoff-check` fails the phrase; do not paraphrase around it.
 
 ## Verify before you finish
 

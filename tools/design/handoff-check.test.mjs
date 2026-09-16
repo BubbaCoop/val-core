@@ -236,6 +236,27 @@ test("a missing HANDOFF section, a missing file, and an invalid contract each fa
   assert.match(errs, /is not one of/);
 });
 
+test("a rendering claim the run did not measure fails; its negation and a cited measurement pass", () => {
+  const claim = HANDOFF.replace("## 2. Load path\n", "## 2. Load path\nWithout Tailwind use the prebuilt bundle — this page uses no utilities, so it renders identically.\n");
+  const { run: dir, spritePath } = setup({ handoff: claim });
+  assert.equal(run(dir, spritePath).status, 1);
+  assert.ok(checks(report(dir), "handoff").some((f) => /rendering outcome/.test(f.message) && /HANDOFF\.md:4/.test(f.message)));
+
+  const inComment = setup({ page: `<!-- swap to the prebuilt entry; the page looks the same without Tailwind -->\n${PAGE}` });
+  assert.equal(run(inComment.run, inComment.spritePath).status, 1);
+  assert.ok(checks(report(inComment.run), "handoff").some((f) => /\+page\.svelte:1 asserts a rendering outcome/.test(f.message)));
+
+  const negated = HANDOFF.replace("## 2. Load path\n", "## 2. Load path\nThe prebuilt bundle does NOT render identically to /source; see the library's contract.\n");
+  const { run: d2, spritePath: s2 } = setup({ handoff: negated });
+  const r2 = run(d2, s2);
+  assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+
+  const cited = HANDOFF.replace("## 2. Load path\n", "## 2. Load path\nPixel-identical to the concept at 375px — measured in 06-accuracy.\n");
+  const { run: d3, spritePath: s3 } = setup({ handoff: cited });
+  const r3 = run(d3, s3);
+  assert.equal(r3.status, 0, r3.stdout + r3.stderr);
+});
+
 test("the load path and the sprite may not live in the package", () => {
   const { run: dir, spritePath } = setup({ page: `<script>\n  import sprite from "@valiify/shortapp-ui/icons/sprite.svg?raw";\n  let { invalid = false } = $props();\n</script>\n${PAGE}` });
   const r = run(dir, spritePath);
