@@ -83,6 +83,31 @@ library.classPrefix is set ("vd") but no enabled pipeline consumes it.
   library.classSpelling until a pipeline that reads them is enabled.
 ```
 
+## CI could not have caught this, and that is the bigger half of the fix
+
+`npm run check` renders every template against **`val.config.example.json`** and nothing else
+(`package.json`: `node bin/val-init.mjs --config val.config.example.json --dry-run`). That
+config has all three pipelines enabled and `classPrefix: "va"` — so the design templates always
+render, `CLASS_AUDIT_FLAGS` always lands somewhere, and the combination that produced this
+finding is a shape CI never constructs.
+
+The example config is a *good* example. That is exactly the problem: it is the happy path, and
+a single happy-path fixture can only prove the placeholders resolve, never that a legal-but-
+degenerate config is rejected.
+
+**Add a second fixture** — `val.config.val-only.example.json` or a fixture under
+`tools/fixtures/` — with `pipelines: { val: true, extract: true }` and no design block,
+mirroring dashboard-ui's real shape. Run `npm run check` against both. Then this ticket's guard
+is enforced by CI on every push rather than only by a test that someone thought to write.
+
+This is worth more than the `checkClassIdentity` fix alone. The guard catches one combination;
+the second fixture catches the *class* of blind spot, and the next config combination that goes
+unexercised will be a different one. A `val`-only consumer is not an edge case — it is half the
+consumers, and it is the half CI has never rendered.
+
+Keep both fixtures in the `check` script, not one `check` and one test, so a drift failure reads
+the same way for both.
+
 ## Tests
 
 `tools/val-init.test.mjs` already covers the config→flags path and is the right home. Per the
@@ -97,6 +122,8 @@ differs from both existing ones and names the key at fault:
   neither key must stay unaffected)
 - all three refusal messages asserted mutually distinct, so this one cannot collapse into the
   existing pair
+- `npm run check` passes against the new `val`-only fixture once the fixture drops the identity
+  keys, and fails against it while they are still declared — the fixture is the regression test
 
 ## What dashboard-ui should do meanwhile
 

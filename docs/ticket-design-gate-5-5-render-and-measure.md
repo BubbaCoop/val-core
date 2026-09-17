@@ -73,7 +73,11 @@ Two existing hosts, both unusable today:
   `fonts → tailwindcss → source` path the methodology mandates, and it inlines no sprite. It is
   a specificity test rig.
 - `~/Desktop/shortapp svelte test` — **right** §11 load path, but pins
-  `@valiify/shortapp-ui@^0.1.2` against a shipped 1.3.0, and val-core `^0.2.0`.
+  `@valiify/shortapp-ui@^0.1.2` against a shipped 1.3.0, and val-core `^0.2.0`. That range
+  predates the `va-` rename entirely. **Deliberately left stale and marked as such** — see
+  `ticket-mark-shortapp-svelte-test-as-stale.md`; do not re-evaluate it as a candidate, and do
+  not upgrade it, because a hand-maintained host drifts silently and the generated shell is what
+  removes the need for one.
 
 val-core should **generate** a minimal shell per run: `app.css` at the configured entry's
 documented load path, `+layout.svelte` inlining the configured sprite once, the package's
