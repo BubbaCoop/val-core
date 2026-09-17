@@ -42,8 +42,12 @@ viewed 19 crops (~890k characters) and re-cached them on every turn.
 
 1. Read manifest.json for frames, export scale and references. Write the
    accepted deviations you can cite (requirements §6 defaults, self-check
-   deviations, orchestrator-accepted items) to 06-accuracy/accepted.json
-   as [{ "id", "figmaNode", "note" }].
+   deviations, orchestrator-accepted items) to 06-accuracy/accepted.json as
+   [{ "id", "figmaNode" | ["figmaNode"], "accepts": [property], "note" }].
+   `accepts` names WHAT the entry excuses, not merely where: geometry.x,
+   geometry.y, geometry.w, geometry.h, shift, colour, content, any. Write the
+   narrowest set that is true. An entry is a statement about one difference,
+   never a blanket pardon for a region — see the rule under 6.
 2. For EVERY frame (state = its input.frames[] state; omit --frame for
    the primary):
      node {{TOOLS_DIR}}/screenshot.mjs <run-dir> --frame <state>
@@ -58,7 +62,9 @@ viewed 19 crops (~890k characters) and re-cached them on every turn.
    pre-label. Adjudicate: confirm or overturn each artifact-candidate
    and accepted-candidate from the evidence; for each needs-review
    finding, read its evidence, view its crop (the only image you view),
-   and decide. Write the plain-language description ("ExpandSection
+   and decide. A pre-label is a candidate, never a verdict — and that cuts
+   both ways: overturning `needs-review` to accepted needs MORE evidence
+   than confirming it, not less. Write the plain-language description ("ExpandSection
    'OWNERSHIP' header: chevron 6px right of design; wrong weight on
    title — 600 vs 500") per finding.
 5. Append your findings to diff-report.json under "findings", each as
@@ -67,7 +73,22 @@ viewed 19 crops (~890k characters) and re-cached them on every turn.
 6. Classify EVERY non-pass tile into exactly one of three classes, and
    record the classification per finding plus a classificationSummary:
    (a) accepted-deviation — covered by a deviation the requirements or
-       orchestrator brief explicitly accepts;
+       orchestrator brief explicitly accepts, AND whose own evidence is
+       consistent with what that entry claims. An entry naming the region is
+       not sufficient: check that the measurement reduces to the accepted
+       difference. A translation the entry excuses should collapse the
+       mismatch when compensated — "shift 4px cuts 7.9% → 7.4%" means the
+       shift accounts for 6% of what you are looking at and something else
+       accounts for the rest. Colours differing under an entry that claims
+       only geometry is the same signal. When the entry does not explain the
+       measurement, the remainder is (c) or needs an entry of its own; say
+       which. Cite every entry you rely on in `acceptedId` (join them with +
+       when more than one applies) so the audit below can check your work.
+       THIS IS THE RULE THAT MATTERS: a region-scoped acceptance once
+       swallowed a real defect — a stretched button whose label was centred
+       instead of flush left sat inside an entry written for a 3.6px width
+       shift, and three consecutive accuracy runs passed it while the page
+       was visibly wrong. The requester found it by looking at the page.
    (b) rasterization-artifact — Chromium-vs-Figma text antialiasing or
        font-advance differences: whole-run horizontal glyph shifts with
        matching colors and ±1–2px aligned geometry. Verify before
@@ -78,6 +99,13 @@ viewed 19 crops (~890k characters) and re-cached them on every turn.
    The classification criteria and the pixel-measurement techniques are
    documented in {{CORE_SKILLS_DIR}}/visual-verification/SKILL.md.
 7. Confirm overlay.png was produced.
+8. Audit your own adjudication, per frame, and report the result:
+     node {{TOOLS_DIR}}/classify-tiles.mjs <run-dir> --frame <state> --accepted 06-accuracy/accepted.json --verify
+   It re-reads the findings you wrote and exits non-zero on any
+   accepted-deviation whose evidence contradicts the entry it cites. Treat a
+   failure as your own finding to resolve — either the difference is a defect,
+   or the entry has to say it covers this too — never as a reason to edit the
+   evidence. Report the audit line verbatim in your summary.
 
 On re-runs after a rework: the orchestrator has archived the previous
 capture and report under 06-accuracy/run-<n>/ (per frame). Run grid-diff

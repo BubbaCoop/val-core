@@ -8,7 +8,23 @@
  *
  *   --frame <state|index>   frame whose diff-report/layout to use (default: primary)
  *   --report <json>         diff-report.json to read (default: the frame's 06-accuracy/)
- *   --accepted <json>       accepted deviations: [{ id, figmaNode?, tiles?: [[col,row]], note? }]
+ *   --accepted <json>       accepted deviations (path is resolved against the RUN DIR
+ *                           first, then the cwd):
+ *                             [{ id, figmaNode?|[figmaNode], tiles?: [[col,row]],
+ *                                accepts?: [property], note? }]
+ *                           `accepts` names WHAT the entry excuses, and the tool only
+ *                           pre-labels a finding accepted when the measured evidence is
+ *                           consistent with that claim. Recognised properties:
+ *                             geometry.x | geometry.y | geometry.w | geometry.h
+ *                             shift      a pure horizontal translation
+ *                             colour     fills/inks differ
+ *                             content    different text or glyphs (unfalsifiable by
+ *                                        measurement — the tool defers to the entry)
+ *                             any        legacy escape hatch; same deference as content
+ *   --verify                adjudication audit: re-read the report's findings[] (written
+ *                           by the accuracy agent) and exit 1 on any finding classified
+ *                           accepted-deviation whose own evidence contradicts the entry
+ *                           it cites. Run it AFTER the agent adjudicates.
  *   --crops                 write a native-scale reference|build crop per needs-review finding
  *   --crops all             …per finding
  *   --out <dir>             where crops go (default: <accuracy-dir>/crops/)
@@ -22,10 +38,15 @@
  *   mismatch after shifting, and the direct mismatch.
  *
  * Pre-labels — CANDIDATES for the agent to confirm, never a verdict:
- *   accepted-candidate    region or tile is in --accepted
+ *   accepted-candidate    region or tile is in --accepted AND the evidence is consistent
+ *                         with what that entry says it excuses
  *   artifact-candidate    colours match, |shift| ≤ 2 dev px, ink box deltas ≤ 2,
  *                         residual after shift < direct (the rasterizer signature)
- *   needs-review          everything else — the agent looks at these
+ *   needs-review          everything else — the agent looks at these. An entry that
+ *                         matches but does NOT explain the measurement lands here too,
+ *                         with the arithmetic in the rationale: a region inside an
+ *                         accepted entry can still hold an unrelated defect, and
+ *                         accepting by region is how one shipped.
  *
  * Writes autoFindings + autoClassificationSummary into the diff-report (never
  * touching the agent's own findings/classificationSummary). Prints ≤ 40 lines.
@@ -51,9 +72,9 @@ import {
   TILE_CSS_PX,
 } from "./lib/png.mjs";
 
-const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: [] });
+const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["verify"] });
 const runDir = positional[0];
-if (!runDir) fail("Usage: node <tools-dir>/classify-tiles.mjs <run-dir> [--frame s] [--report json] [--accepted json] [--crops [all]] [--out dir]");
+if (!runDir) fail("Usage: node <tools-dir>/classify-tiles.mjs <run-dir> [--frame s] [--report json] [--accepted json] [--verify] [--crops [all]] [--out dir]");
 
 let run;
 try {
@@ -69,6 +90,94 @@ if (!existsSync(reportPath)) fail(`No diff-report at ${reportPath} — run grid-
 const report = JSON.parse(readFileSync(reportPath, "utf8"));
 const scale = report.exportScale ?? 2;
 const tilePx = (report.tileSizePx ?? TILE_CSS_PX) * scale;
+
+let accepted = [];
+let acceptedPath = null;
+if (opts.accepted) {
+  // Every other path argument is run-relative; this one used to resolve against the
+  // cwd alone, so the invocation the agent template documents (run-relative path, run
+  // from the repo root) could not find the file. Try the run dir first, then the cwd.
+  const candidates = [join(runPath, opts.accepted), resolve(opts.accepted)];
+  acceptedPath = candidates.find(existsSync) ?? null;
+  if (!acceptedPath) fail(`Accepted list not found: tried ${candidates.join(" and ")}`);
+  const raw = JSON.parse(readFileSync(acceptedPath, "utf8"));
+  accepted = Array.isArray(raw) ? raw : raw.accepted ?? [];
+}
+// figmaNode may name one node or several. Keying by the raw value meant an array
+// silently matched nothing, so an accepted deviation quietly stopped applying.
+const acceptedByNode = new Map();
+for (const a of accepted) {
+  for (const nodeId of Array.isArray(a.figmaNode) ? a.figmaNode : a.figmaNode ? [a.figmaNode] : []) {
+    if (typeof nodeId !== "string") fail(`Accepted entry ${a.id ?? "(unnamed)"}: figmaNode must be a string or an array of strings`);
+    if (!acceptedByNode.has(nodeId)) acceptedByNode.set(nodeId, a);
+  }
+}
+const acceptedByTile = new Map();
+for (const a of accepted) for (const t of a.tiles ?? []) acceptedByTile.set(`${t[0]},${t[1]}`, a);
+
+// ---- --verify: audit the agent's adjudication, then stop -----------------------
+// The pre-labels above are advisory and the agent may overturn them — that is the
+// design. What it may NOT do is resolve a finding to accepted-deviation when the
+// finding's own evidence contradicts the entry it cites. That happened: a needs-review
+// finding whose measurement showed a 4px shift cutting the mismatch 7.9% → 7.4% was
+// classified accepted against an entry about a width shift, and the real defect (a
+// centred button label) reached the requester. This is the gate for that.
+if (opts.verify) {
+  const adjudicated = report.findings ?? [];
+  if (!adjudicated.length) fail("--verify: the report has no findings[] — run the accuracy agent's adjudication first");
+  const violations = [];
+  for (const f of adjudicated) {
+    if (f.classification !== "accepted-deviation") continue;
+    // A finding may be covered by more than one entry — a hairline offset AND an ink
+    // swap, say. Agents already write that as "D10+D8", so accept the composite forms
+    // (acceptedIds[], or an acceptedId joining ids with + , or whitespace) and judge
+    // the finding against the UNION of what those entries say they excuse.
+    const citedIds = Array.isArray(f.acceptedIds)
+      ? f.acceptedIds
+      : typeof f.acceptedId === "string"
+        ? f.acceptedId.split(/[+,\s]+/).filter(Boolean)
+        : [];
+    const entries = citedIds.map((id) => accepted.find((a) => a.id === id) ?? null);
+    const unknown = citedIds.filter((id, i) => !entries[i]);
+    if (!citedIds.length) {
+      violations.push({ id: f.id, region: f.region, why: "classified accepted-deviation but cites no accepted entry (acceptedId is null)" });
+      continue;
+    }
+    if (unknown.length && accepted.length) {
+      violations.push({ id: f.id, region: f.region, why: `cites ${unknown.map((u) => `"${u}"`).join(", ")}, not in the accepted list` });
+      continue;
+    }
+    const known = entries.filter(Boolean);
+    if (!known.length) continue;
+    const entry = {
+      id: known.map((e) => e.id).join("+"),
+      accepts: known.some((e) => !Array.isArray(e.accepts) || !e.accepts.length)
+        ? [] // one of them declares nothing: fall back to the general residual test
+        : [...new Set(known.flatMap((e) => e.accepts))],
+    };
+    const ev = f.evidence;
+    if (!ev || !ev.horizontalShift || ev.directMismatchPct === undefined) continue; // nothing to check against
+    const explained = ev.horizontalShift.explainedPct ?? (ev.directMismatchPct > 0 ? Math.max(0, Math.round((100 * (ev.directMismatchPct - ev.horizontalShift.mismatchPctAfterShift)) / ev.directMismatchPct)) : 100);
+    const c = acceptanceConsistency(entry, {
+      match: ev.coloursMatch,
+      inkDelta: ev.ink?.delta ?? null,
+      shift: { shift: ev.horizontalShift.shift, mismatchPct: ev.horizontalShift.mismatchPctAfterShift },
+      direct: { pct: ev.directMismatchPct },
+      shiftExplainedPct: explained,
+    });
+    if (!c.consistent) violations.push({ id: f.id, region: f.region, acceptedId: entry.id, why: c.why });
+  }
+  const out = [];
+  out.push(
+    violations.length
+      ? `ACCEPTANCE-AUDIT: FAIL | ${adjudicated.length} finding(s) | ${violations.length} accepted-deviation(s) the evidence contradicts`
+      : `ACCEPTANCE-AUDIT: PASS | ${adjudicated.length} finding(s) | every accepted-deviation is consistent with its entry`,
+  );
+  for (const v of violations) out.push(`  ${v.id} ${v.region}${v.acceptedId ? ` → ${v.acceptedId}` : ""}: ${v.why}`);
+  if (violations.length) out.push("Each is either a separate defect in an accepted region, or an entry that must state it covers this difference too.");
+  printCapped(out, 40);
+  process.exit(violations.length ? 1 : 0);
+}
 
 const refPath = report.comparison?.reference ? resolveRunPath(runPath, report.comparison.reference) : referenceFor(runPath, frame, manifest).path;
 const buildPath = report.comparison?.build ? resolveRunPath(runPath, report.comparison.build) : join(accDir, "build@2x.png");
@@ -86,17 +195,6 @@ try {
 const layout = loadLayout(runPath, frame);
 const regions = (layout?.regions ?? []).map((r) => ({ ...r, device: cssToDeviceBox(r, scale) }));
 const rank = (kind) => (kind === "instance" ? 3 : kind === "divider" ? 2 : 1);
-
-let accepted = [];
-if (opts.accepted) {
-  const p = resolve(opts.accepted);
-  if (!existsSync(p)) fail(`Accepted list not found: ${p}`);
-  const raw = JSON.parse(readFileSync(p, "utf8"));
-  accepted = Array.isArray(raw) ? raw : raw.accepted ?? [];
-}
-const acceptedByNode = new Map(accepted.filter((a) => a.figmaNode).map((a) => [a.figmaNode, a]));
-const acceptedByTile = new Map();
-for (const a of accepted) for (const t of a.tiles ?? []) acceptedByTile.set(`${t[0]},${t[1]}`, a);
 
 // ---- map tiles to regions -----------------------------------------------------
 const nonPass = (report.tiles ?? []).filter((t) => !t.empty && t.class !== "pass");
@@ -157,11 +255,24 @@ for (const [key, g] of groups) {
   const direct = regionMismatch(ref, build, box);
 
   const acc = (g.region && acceptedByNode.get(g.region.figmaNode)) || g.tiles.map((t) => acceptedByTile.get(`${t.col},${t.row}`)).find(Boolean) || null;
+  // How much of the difference a pure translation accounts for. A region that really
+  // is just shifted drops to near zero after compensating; one that also changed
+  // inside barely moves, and that gap is what tells the two apart.
+  const shiftExplainedPct = direct.pct > 0 ? Math.max(0, Math.round((100 * (direct.pct - shift.mismatchPct)) / direct.pct)) : 100;
+  const consistency = acc ? acceptanceConsistency(acc, { match, inkDelta, shift, direct, shiftExplainedPct }) : null;
+
   let preClass;
   let why;
-  if (acc) {
+  if (acc && consistency.consistent) {
     preClass = "accepted-candidate";
-    why = `matches accepted deviation ${acc.id ?? "(unnamed)"}`;
+    why = `matches accepted deviation ${acc.id ?? "(unnamed)"}${consistency.why ? ` — ${consistency.why}` : ""}`;
+  } else if (acc) {
+    // The entry names this region but does not account for what was measured. Accepting
+    // by region is how a real defect shipped: a button inside an entry written for a
+    // 3.6px width shift had its label centred instead of flush left, and three accuracy
+    // runs passed it. Send it to the agent with the arithmetic.
+    preClass = "needs-review";
+    why = `accepted deviation ${acc.id ?? "(unnamed)"} matches this region but does NOT explain the measurement — ${consistency.why}. Adjudicate the rest: either it is a separate defect, or the entry needs to say it covers this too.`;
   } else if (
     match &&
     Math.abs(shift.shift) <= 2 &&
@@ -209,11 +320,13 @@ for (const [key, g] of groups) {
       coloursMatch: match,
       histogram: { reference: histRef.map(hEntry), build: histBuild.map(hEntry) },
       ink: { reference: inkRef && strip(inkRef), build: inkBuild && strip(inkBuild), delta: inkDelta },
-      horizontalShift: { shift: shift.shift, mismatchPctAfterShift: r1(shift.mismatchPct) },
+      horizontalShift: { shift: shift.shift, mismatchPctAfterShift: r1(shift.mismatchPct), explainedPct: shiftExplainedPct },
     },
     preClassification: preClass,
     rationale: why,
     acceptedId: acc?.id ?? null,
+    acceptedAccepts: acc?.accepts ?? null,
+    acceptedExplainsEvidence: consistency ? consistency.consistent : null,
   });
 }
 
@@ -269,4 +382,43 @@ function strip(b) {
 }
 function fmtDelta(d) {
   return `dx ${d.dx} dy ${d.dy} dw ${d.dw} dh ${d.dh}`;
+}
+
+export function acceptanceConsistency(acc, ev) {
+  // Recognised `accepts` properties. `content` and `any` are unfalsifiable by
+  // measurement — different words render differently in every dimension — so the tool
+  // defers to the entry. Everything else has to survive the numbers. (Declared inside
+  // the function: it runs during module evaluation, before a module-level const would
+  // have left its temporal dead zone.)
+  const DEFERRED = new Set(["content", "any"]);
+  const GEOMETRY = new Set(["shift", "geometry.x", "geometry.y", "geometry.w", "geometry.h"]);
+  const props = Array.isArray(acc.accepts) ? acc.accepts : [];
+  const has = (p) => props.includes(p);
+  if (props.some((p) => DEFERRED.has(p))) {
+    return { consistent: true, why: `entry accepts ${props.join(", ")} — not falsifiable by measurement` };
+  }
+  const notes = [];
+  // Colour: an entry that does not claim colour must not be covering a colour change.
+  if (!ev.match && !has("colour")) {
+    notes.push(
+      `colour sets differ and the entry does not say it covers colour${props.length ? ` (it covers ${props.join(", ")})` : ""}`,
+    );
+  }
+  // Geometry: when position or size is the ONLY thing the entry claims, the measurement
+  // has to reduce to that — a translation that leaves most of the mismatch behind is not
+  // the story. An entry that also claims colour can account for a residual a shift
+  // cannot, so the test does not apply to it.
+  const geometric = props.length === 0 || props.every((p) => GEOMETRY.has(p));
+  if (geometric && ev.direct.pct > 2 && ev.shiftExplainedPct < 60) {
+    notes.push(
+      `a ${ev.shift.shift}px shift explains only ${ev.shiftExplainedPct}% of the difference (${r1(ev.direct.pct)}% → ${r1(ev.shift.mismatchPct)}% after compensating), so something inside the region differs too`,
+    );
+  }
+  if (notes.length) return { consistent: false, why: notes.join("; ") };
+  return {
+    consistent: true,
+    why: props.length
+      ? `evidence is consistent with ${props.join(", ")}`
+      : `shift explains ${ev.shiftExplainedPct}% of the difference`,
+  };
 }

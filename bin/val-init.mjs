@@ -154,6 +154,18 @@ const surfacesTable = Object.keys(surfaces).length
 const frameworkLabel = output.framework === "sveltekit" ? "SvelteKit" : output.framework ?? "SvelteKit";
 const outputFramework = `${frameworkLabel} + Svelte ${output.svelteMajor ?? "5"}${String(output.svelteMajor ?? "5") === "5" ? " (runes)" : ""}`;
 
+/**
+ * The stylesheets a built page links, in order. `pageStylesheets` is the real consumer
+ * entry; `componentCss` is the single-file spelling that predates it. Picking the wrong
+ * one is silent — a bundle with no utility layer leaves those classes rendering nothing —
+ * so the page is told to link exactly what a consumer is told to install.
+ */
+function renderStylesheets(paths) {
+  const list =
+    Array.isArray(paths.pageStylesheets) && paths.pageStylesheets.length ? paths.pageStylesheets : [paths.componentCss];
+  return list.length === 1 ? list[0] : list.map((p, n) => `${n + 1}. ${p}`).join("  ");
+}
+
 const substitutions = {
   LIBRARY_NAME: library.name,
   LIBRARY_DISPLAY_NAME: library.displayName,
@@ -169,6 +181,7 @@ const substitutions = {
   REGISTRY_PATH: paths.componentRegistry,
   TOKEN_SOURCE: paths.tokenSource,
   COMPONENT_CSS: paths.componentCss,
+  PAGE_STYLESHEETS: renderStylesheets(paths),
   ICON_SPRITE: paths.iconSprite,
   STORIES_DIR: paths.storiesDir.replace(/\/$/, ""),
   COMPONENTS_DIR: paths.componentsDir.replace(/\/$/, ""),

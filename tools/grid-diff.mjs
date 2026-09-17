@@ -11,7 +11,12 @@
  *   --out <dir>             override the output directory
  *   --scale <n>             override the device scale (tile = 64 CSS px × scale)
  *   --baseline <report>     a previous diff-report.json: carry its per-tile
- *                           classifications forward and report what changed
+ *                           classifications forward and report what changed.
+ *                           Classifications are read from tiles[].classification
+ *                           (with tiles[].finding), from a legacy
+ *                           tileClassification map, and from findings[].tiles —
+ *                           whose entries may be [col,row], {col,row} or
+ *                           "col,row". Previously-passing tiles are not carried.
  *
  * Defaults (unchanged from 0.1.x for the primary frame):
  *   reference  <run-dir>/01-extraction/exports/page@2x.png, or the frame's
@@ -110,17 +115,42 @@ if (opts.baseline) {
   const key = (t) => `${t.col},${t.row}`;
   const prev = new Map((base.tiles ?? []).map((t) => [key(t), t]));
 
-  // Per-tile classification from the previous run: explicit tileClassification
-  // (object or array) first, else derived from findings[].tiles.
+  // A tile reference inside findings[].tiles is written three ways in the
+  // wild: [col, row] (what the accuracy agent emits), {col, row}, and the
+  // "col,row" key string. Normalise all three; anything else is ignored
+  // rather than collapsed onto an "undefined,undefined" key.
+  const refKey = (t) => {
+    if (Array.isArray(t)) return t.length >= 2 && t[0] != null && t[1] != null ? `${t[0]},${t[1]}` : null;
+    if (typeof t === "string") return /^-?\d+\s*,\s*-?\d+$/.test(t.trim()) ? t.trim().replace(/\s+/g, "") : null;
+    if (t && typeof t === "object" && t.col != null && t.row != null) return key(t);
+    return null;
+  };
+
+  // Per-tile classification from the previous run, most specific first:
+  //   1. tiles[].classification — what the accuracy stage actually writes
+  //   2. tileClassification (object or array) — older/hand-written reports
+  //   3. derived from findings[].tiles
+  // An explicit per-tile classification always beats one derived from a
+  // finding. Tiles the previous run scored as pass (or empty) are skipped:
+  // their "pass" classification mirrors the grid class rather than recording
+  // an adjudication, and carrying it would silently excuse a tile that has
+  // since gone non-pass.
   const prevClass = new Map();
+  const put = (k, entry) => {
+    if (k && !prevClass.has(k)) prevClass.set(k, entry);
+  };
+  for (const t of base.tiles ?? []) {
+    if (!t || t.classification == null) continue;
+    if (t.empty || t.class === "pass") continue;
+    put(key(t), { classification: t.classification, finding: t.finding ?? null, source: "tile" });
+  }
   const tc = base.tileClassification;
   for (const t of Array.isArray(tc) ? tc : Object.values(tc ?? {})) {
-    if (t && t.col !== undefined) prevClass.set(key(t), { classification: t.classification, finding: t.finding ?? null });
+    if (t && t.col !== undefined) put(key(t), { classification: t.classification, finding: t.finding ?? null, source: "tileClassification" });
   }
   for (const f of base.findings ?? []) {
     for (const t of f.tiles ?? []) {
-      const k = typeof t === "string" ? t : key(t);
-      if (!prevClass.has(k)) prevClass.set(k, { classification: f.classification ?? null, finding: f.id ?? f.region ?? null });
+      put(refKey(t), { classification: f.classification ?? null, finding: f.id ?? f.region ?? null, source: "finding" });
     }
   }
 

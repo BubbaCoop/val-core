@@ -4,7 +4,8 @@
  *
  * A 400x300 frame with a header region (mapped via regions.json) and a card
  * instance (mapped via data-val-node). Exact geometry passes; a 5px drift
- * fails and is named in the report.
+ * fails and is named in the report; the same drift covered by --accepted
+ * reports `accepted` and the frame passes.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -82,4 +83,89 @@ test("exact geometry passes; a 5px drift fails and is named", async (t) => {
   assert.equal(card.status, "fail");
   assert.equal(card.delta.dy, 5);
   assert.match(r2.stdout, /✗ card \(9:2\)/);
+});
+
+test("a drift covered by --accepted is reported, not failed", async (t) => {
+  const dir = makeRun(75); // the same 5px drift the previous test fails on
+  if (!(await chromiumAvailable())) {
+    t.skip("chromium not installed");
+    return;
+  }
+  writeFileSync(
+    join(dir, "accepted.json"),
+    JSON.stringify([{ id: "D7", figmaNode: ["9:2"], frames: ["default"], note: "the frame draws a stray 5px; the component's own geometry ships" }]),
+  );
+  const r = spawnSync(process.execPath, [TOOL, dir, "--accepted", "accepted.json"], { encoding: "utf8" }); // run-relative, as the templates document
+  const rep = JSON.parse(readFileSync(join(dir, "04-build", "geometry-default.json"), "utf8"));
+  assert.equal(rep.verdict, "PASS", "an accepted miss must not sink the frame");
+  const card = rep.regions.find((x) => x.figmaNode === "9:2");
+  assert.equal(card.status, "accepted");
+  assert.equal(card.acceptedId, "D7");
+  assert.equal(card.delta.dy, 5, "the miss is still measured and recorded, not hidden");
+  assert.equal(rep.counts.accepted, 1);
+  assert.equal(rep.counts.fail, 0);
+  assert.equal(r.status, 0, "exit code follows the verdict");
+  assert.match(r.stdout, /1 accepted/);
+  assert.match(r.stdout, /~ card \(9:2\)/, "an accepted miss is printed, never silent");
+});
+
+test("an accepted entry scoped to other frames does not excuse this one", async (t) => {
+  const dir = makeRun(75);
+  if (!(await chromiumAvailable())) {
+    t.skip("chromium not installed");
+    return;
+  }
+  writeFileSync(
+    join(dir, "accepted.json"),
+    JSON.stringify([{ id: "D7", figmaNode: "9:2", frames: ["mobile-filled"], note: "only on the mobile frame" }]),
+  );
+  const r = spawnSync(process.execPath, [TOOL, dir, "--accepted", "accepted.json"], { encoding: "utf8" });
+  const rep = JSON.parse(readFileSync(join(dir, "04-build", "geometry-default.json"), "utf8"));
+  assert.equal(rep.verdict, "FAIL");
+  assert.equal(rep.regions.find((x) => x.figmaNode === "9:2").status, "fail");
+  assert.equal(r.status, 1);
+});
+
+test("a region the build deliberately omits is accepted, not unmapped", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "val-geometry-"));
+  if (!(await chromiumAvailable())) {
+    t.skip("chromium not installed");
+    return;
+  }
+  mkdirSync(join(dir, "01-extraction"), { recursive: true });
+  mkdirSync(join(dir, "04-build"), { recursive: true });
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify({ input: { exportScale: 1, frame: { w: 400, h: 300 }, frames: [{ state: "default", w: 400, h: 300 }] } }));
+  writeFileSync(
+    join(dir, "01-extraction", "layout.json"),
+    JSON.stringify({
+      frame: "9:0",
+      state: "default",
+      w: 400,
+      h: 300,
+      regions: [
+        { figmaNode: "9:1", name: "header", kind: "region", x: 0, y: 0, w: 400, h: 50 },
+        // Drawn in the frame at opacity 0 and dropped by the requirements — the page has no element for it.
+        { figmaNode: "9:9", name: "hidden-back-icon", kind: "instance", x: 20, y: 15, w: 18, h: 18 },
+      ],
+    }),
+  );
+  writeFileSync(join(dir, "04-build", "regions.json"), JSON.stringify({ "9:1": "header" }));
+  writeFileSync(
+    join(dir, "04-build", "index.html"),
+    `<!doctype html><html><head><style>html,body{margin:0;height:300px;overflow:hidden}header{height:50px;background:#eee}</style></head><body><header></header></body></html>`,
+  );
+  const bare = spawnSync(process.execPath, [TOOL, dir], { encoding: "utf8" });
+  assert.equal(bare.status, 1, "without an entry, a region with no element is still unmapped and fails");
+
+  writeFileSync(join(dir, "accepted.json"), JSON.stringify([{ id: "S15", figmaNode: "9:9", note: "out of scope by the requirements" }]));
+  const r = spawnSync(process.execPath, [TOOL, dir, "--accepted", "accepted.json"], { encoding: "utf8" });
+  const rep = JSON.parse(readFileSync(join(dir, "04-build", "geometry-default.json"), "utf8"));
+  assert.equal(rep.verdict, "PASS");
+  assert.equal(rep.counts.unmapped, 0);
+  assert.equal(rep.counts.accepted, 1);
+  const row = rep.regions.find((x) => x.figmaNode === "9:9");
+  assert.equal(row.status, "accepted");
+  assert.equal(row.notBuilt, true);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /not built/);
 });

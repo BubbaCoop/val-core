@@ -160,3 +160,71 @@ test("without a fix list the footprint is reported and scope is not asserted", (
   assert.equal(report.clusters.length, 1);
   assert.match(out, /scope not asserted/);
 });
+
+// ---- unresolved-entry output hygiene ------------------------------------------
+// A fix entry's `siblings` are routinely CSS selectors (".va-radio-field-options")
+// with no figmaNode, so they never resolve. Naming all of them on one line buried
+// the verdict in a real run (31 entries); the note summarises by default.
+
+/** A fix list with one unresolvable fix and `n` unresolvable CSS-selector siblings. */
+function noisyFixList(dir, n) {
+  const p = join(dir, "04-build", "fixlist-noisy.json");
+  const siblings = Array.from({ length: n }, (_, i) => `.va-sibling-${i}`);
+  writeFileSync(
+    p,
+    JSON.stringify([
+      { id: "F1", figmaNode: "1:1", siblings }, // resolvable fix, unresolvable siblings
+      { id: "F2", selectorScope: "#nope", siblings: [] }, // no box, no figmaNode
+    ]),
+  );
+  return p;
+}
+
+test("the unresolved-entries note summarises by default", () => {
+  const dir = makeRun();
+  const before = write(dir, "before.png", scene({ aColor: BLUE }));
+  const after = write(dir, "after.png", scene({ aColor: GREEN }));
+  const { status, report, out } = run(dir, ["--before", before, "--after", after, "--fixlist", noisyFixList(dir, 30)]);
+
+  assert.equal(status, 0);
+  assert.equal(report.verdict, "PASS", "output hygiene must not move the verdict");
+  assert.equal(report.unresolved.total, 31);
+  assert.equal(report.unresolved.fix, 1);
+  assert.equal(report.unresolved.sibling, 30);
+  assert.equal(report.unresolved.ids.length, 31, "the full list stays in the written report");
+
+  const noteLine = out.split("\n").find((l) => l.includes("note:"));
+  assert.ok(noteLine, "a note line must still be printed");
+  assert.match(noteLine, /31 fix\/sibling entries/);
+  assert.match(noteLine, /\(1 fix, 30 sibling\)/);
+  assert.match(noteLine, /\+28 more/);
+  assert.match(noteLine, /First: F2,/, "an unresolvable FIX entry is named before the sibling noise");
+  assert.ok(!noteLine.includes(".va-sibling-29"), `the note must not list every entry:\n${noteLine}`);
+  assert.ok(noteLine.length < 400, `note is ${noteLine.length} chars — it is burying the output`);
+});
+
+test("--list-unresolved prints every entry", () => {
+  const dir = makeRun();
+  const before = write(dir, "before.png", scene({ aColor: BLUE }));
+  const after = write(dir, "after.png", scene({ aColor: GREEN }));
+  const { status, report, out } = run(dir, ["--before", before, "--after", after, "--fixlist", noisyFixList(dir, 30), "--list-unresolved"]);
+
+  assert.equal(status, 0);
+  assert.equal(report.verdict, "PASS");
+  assert.equal(report.unresolved.total, 31);
+  assert.match(report.note, /F1:sibling:\.va-sibling-29/);
+  assert.match(report.note, /F1:sibling:\.va-sibling-0/);
+  assert.ok(!report.note.includes("more —"), "nothing is elided under --list-unresolved");
+  assert.match(report.note, /: F2, F1:sibling:\.va-sibling-0/, "fix entries lead the list");
+  assert.ok(out.includes(".va-sibling-29"), "the console prints the full list too");
+});
+
+test("with everything resolvable there is no unresolved note", () => {
+  const dir = makeRun();
+  const before = write(dir, "before.png", scene({ aColor: BLUE }));
+  const after = write(dir, "after.png", scene({ aColor: GREEN }));
+  const { report } = run(dir, ["--before", before, "--after", after, "--fixlist", join(dir, "04-build", "fixlist.json")]);
+  assert.equal(report.note, null);
+  assert.equal(report.unresolved.total, 0);
+  assert.deepEqual(report.unresolved.ids, []);
+});

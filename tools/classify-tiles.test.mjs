@@ -6,7 +6,10 @@
  * difference) and recolours the block (a genuine difference).
  *
  * 1. Tiles map to the right regions; text → artifact-candidate, block → needs-review.
- * 2. --accepted turns the block into accepted-candidate.
+ * 2. --accepted turns the block into accepted-candidate when the entry says what it
+ *    excuses, and leaves it for review when the entry does not explain the measurement.
+ * 2b. --verify audits what the agent wrote into findings[] and fails a citation the
+ *    evidence contradicts.
  * 3. --crops writes a side-by-side crop for needs-review findings only.
  */
 import { test } from "node:test";
@@ -100,14 +103,80 @@ test("tiles map to layout regions and are pre-classified by evidence", () => {
   assert.equal(report.findings, undefined);
 });
 
-test("--accepted pre-labels a region as accepted-candidate", () => {
+test("--accepted pre-labels a region as accepted-candidate when the entry explains it", () => {
   const dir = makeRun();
   const acc = join(dir, "accepted.json");
-  writeFileSync(acc, JSON.stringify([{ id: "D3", figmaNode: "2:2", note: "swatch colour is a documented deviation" }]));
+  writeFileSync(acc, JSON.stringify([{ id: "D3", figmaNode: "2:2", accepts: ["colour"], note: "swatch colour is a documented deviation" }]));
   const { report } = classify(dir, ["--accepted", acc]);
   const block = report.autoFindings.find((x) => x.figmaNode === "2:2");
   assert.equal(block.preClassification, "accepted-candidate");
   assert.equal(block.acceptedId, "D3");
+  assert.equal(block.acceptedExplainsEvidence, true);
+});
+
+test("an accepted entry that does not explain the measurement goes to review, with the arithmetic", () => {
+  const dir = makeRun();
+  const acc = join(dir, "accepted.json");
+  // The swatch is recoloured, but the entry only claims a position shift — the shape of
+  // the miss that let a centred button label pass three accuracy runs.
+  writeFileSync(acc, JSON.stringify([{ id: "R-SHIFT", figmaNode: "2:2", accepts: ["geometry.x"], note: "shifted right" }]));
+  const { report } = classify(dir, ["--accepted", acc]);
+  const block = report.autoFindings.find((x) => x.figmaNode === "2:2");
+  assert.equal(block.preClassification, "needs-review", "an entry matching the region is not a reason to accept what it does not explain");
+  assert.equal(block.acceptedExplainsEvidence, false);
+  assert.match(block.rationale, /does NOT explain/);
+  assert.match(block.rationale, /colour/);
+});
+
+test("figmaNode may name several nodes, and --accepted resolves against the run dir", () => {
+  const dir = makeRun();
+  mkdirSync(join(dir, "06-accuracy"), { recursive: true });
+  // Written inside the run and passed run-relative: the documented invocation.
+  writeFileSync(join(dir, "06-accuracy", "accepted.json"), JSON.stringify([{ id: "D3", figmaNode: ["9:9", "2:2"], accepts: ["colour"] }]));
+  const { report } = classify(dir, ["--accepted", "06-accuracy/accepted.json"]);
+  const block = report.autoFindings.find((x) => x.figmaNode === "2:2");
+  assert.equal(block.preClassification, "accepted-candidate");
+  assert.equal(block.acceptedId, "D3");
+});
+
+test("--verify fails an accepted-deviation the finding's own evidence contradicts", () => {
+  const dir = makeRun();
+  const acc = join(dir, "accepted.json");
+  writeFileSync(acc, JSON.stringify([{ id: "R-SHIFT", figmaNode: "2:2", accepts: ["geometry.x"] }]));
+  const { report } = classify(dir, ["--accepted", acc]);
+  // The agent adjudicates: it accepts the recoloured block against a shift-only entry.
+  report.findings = report.autoFindings.map((f) =>
+    f.figmaNode === "2:2" ? { ...f, classification: "accepted-deviation", acceptedId: "R-SHIFT" } : { ...f, classification: "rasterization-artifact" },
+  );
+  writeFileSync(join(dir, "06-accuracy", "diff-report.json"), JSON.stringify(report, null, 2));
+  let code = 0;
+  let out = "";
+  try {
+    out = execFileSync(process.execPath, [TOOL, dir, "--accepted", acc, "--verify"], { stdio: "pipe" }).toString();
+  } catch (e) {
+    code = e.status;
+    out = e.stdout.toString();
+  }
+  assert.equal(code, 1, "a contradicted acceptance must exit non-zero");
+  assert.match(out, /ACCEPTANCE-AUDIT: FAIL/);
+  assert.match(out, /R-SHIFT/);
+});
+
+test("--verify passes a consistent acceptance, including a composite citation", () => {
+  const dir = makeRun();
+  const acc = join(dir, "accepted.json");
+  writeFileSync(acc, JSON.stringify([
+    { id: "D3", figmaNode: "2:2", accepts: ["colour"] },
+    { id: "D9", figmaNode: "2:2", accepts: ["geometry.x"] },
+  ]));
+  const { report } = classify(dir, ["--accepted", acc]);
+  // Agents write a finding covered by two entries as "D3+D9".
+  report.findings = report.autoFindings.map((f) =>
+    f.figmaNode === "2:2" ? { ...f, classification: "accepted-deviation", acceptedId: "D3+D9" } : { ...f, classification: "rasterization-artifact" },
+  );
+  writeFileSync(join(dir, "06-accuracy", "diff-report.json"), JSON.stringify(report, null, 2));
+  const out = execFileSync(process.execPath, [TOOL, dir, "--accepted", acc, "--verify"], { stdio: "pipe" }).toString();
+  assert.match(out, /ACCEPTANCE-AUDIT: PASS/);
 });
 
 test("--crops writes a side-by-side crop for needs-review findings only", () => {

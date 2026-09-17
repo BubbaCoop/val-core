@@ -184,3 +184,146 @@ test("explicit --reference/--build/--out need no manifest", () => {
   assert.equal(report.grid.cols, 5);
   assert.ok(report.summary.fail > 0);
 });
+
+// ---- baseline carry-forward against the shape the accuracy stage really writes ----
+// The accuracy agent annotates every tile in place (tiles[].classification +
+// tiles[].finding) and writes findings[] whose `tiles` are [col, row] ARRAYS.
+// Both were ignored before 0.6.2: the code looked for a `tileClassification`
+// key nothing writes, and keyed array refs through `t.col` → "undefined,undefined".
+
+/** Build a baseline report in the real accuracy-stage shape. */
+function accuracyBaseline(report, { annotateTiles = true, findings = [] } = {}) {
+  const b = JSON.parse(JSON.stringify(report));
+  const findingFor = new Map();
+  for (const f of findings) {
+    for (const t of f.tiles) {
+      if (Array.isArray(t)) findingFor.set(`${t[0]},${t[1]}`, f);
+      else if (typeof t === "string") findingFor.set(t, f);
+      else if (t && t.col !== undefined) findingFor.set(`${t.col},${t.row}`, f);
+    }
+  }
+  if (annotateTiles) {
+    for (const t of b.tiles) {
+      const f = findingFor.get(`${t.col},${t.row}`);
+      const nonPass = !t.empty && t.class !== "pass";
+      t.classification = nonPass && f ? f.classification : "pass";
+      if (nonPass && f) {
+        t.finding = f.id;
+        t.carriedFrom = "finding";
+      }
+    }
+  }
+  b.findings = findings;
+  return b;
+}
+
+test("--baseline reads tiles[].classification (the key the accuracy stage writes)", () => {
+  const dir = makeRunDir(stable(), shifted());
+  const first = runTool(dir).report;
+  const base = accuracyBaseline(first, {
+    findings: [{ id: "A01", region: "block", classification: "rasterization-artifact", tiles: [[2, 2], [3, 2]] }],
+  });
+  assert.ok(!("tileClassification" in base), "the real report has no tileClassification key");
+  assert.equal(base.tiles.filter((t) => t.classification !== undefined).length, base.tiles.length);
+  const basePath = join(dir, "06-accuracy", "base-tiles.json");
+  writeFileSync(basePath, JSON.stringify(base));
+
+  const again = runTool(dir, ["--baseline", basePath]).report;
+  assert.equal(again.baseline.carriedCount, 2);
+  assert.equal(again.baseline.uncarriedNonPass.length, 0);
+  assert.equal(again.baseline.carriedClassification["2,2"].classification, "rasterization-artifact");
+  assert.equal(again.baseline.carriedClassification["2,2"].finding, "A01", "the finding id rides along");
+  assert.equal(again.baseline.carriedClassification["2,2"].source, "tile");
+  // Passing tiles are NOT carried — their "pass" mirrors the grid class rather
+  // than recording an adjudication.
+  assert.equal(again.baseline.carriedClassification["0,0"], undefined);
+});
+
+test("--baseline accepts [col,row] array tile refs in findings[]", () => {
+  const dir = makeRunDir(stable(), shifted());
+  const first = runTool(dir).report;
+  // Findings only — no per-tile annotation at all (the pre-classification shape).
+  const base = accuracyBaseline(first, {
+    annotateTiles: false,
+    findings: [{ id: "A02", classification: "accepted-deviation", tiles: [[2, 2], [3, 2]] }],
+  });
+  const basePath = join(dir, "06-accuracy", "base-arrays.json");
+  writeFileSync(basePath, JSON.stringify(base));
+
+  const again = runTool(dir, ["--baseline", basePath]).report;
+  assert.equal(again.baseline.carriedCount, 2, "array refs must not collapse onto one bogus key");
+  assert.equal(again.baseline.carriedClassification["2,2"].classification, "accepted-deviation");
+  assert.equal(again.baseline.carriedClassification["3,2"].finding, "A02");
+  assert.equal(again.baseline.carriedClassification["2,2"].source, "finding");
+  assert.equal(again.baseline.carriedClassification["undefined,undefined"], undefined);
+});
+
+test('--baseline accepts "col,row" string tile refs, and skips malformed ones', () => {
+  const dir = makeRunDir(stable(), shifted());
+  const first = runTool(dir).report;
+  const base = accuracyBaseline(first, {
+    annotateTiles: false,
+    findings: [{ id: "A03", classification: "accepted-deviation", tiles: ["2,2", "3,2", "not-a-tile", null] }],
+  });
+  const basePath = join(dir, "06-accuracy", "base-strings.json");
+  writeFileSync(basePath, JSON.stringify(base));
+
+  const again = runTool(dir, ["--baseline", basePath]).report;
+  assert.equal(again.baseline.carriedCount, 2);
+  assert.equal(again.baseline.carriedClassification["3,2"].classification, "accepted-deviation");
+});
+
+test("--baseline: an explicit per-tile classification beats one derived from a finding", () => {
+  const dir = makeRunDir(stable(), shifted());
+  const first = runTool(dir).report;
+  const base = accuracyBaseline(first, {
+    findings: [{ id: "A04", classification: "rasterization-artifact", tiles: [[2, 2], [3, 2]] }],
+  });
+  // The agent overturned tile (2,2) in place without rewriting the finding.
+  const t = base.tiles.find((x) => x.col === 2 && x.row === 2);
+  t.classification = "genuine-defect";
+  t.finding = "D1";
+  // …and a legacy tileClassification map disagrees about a tile the tiles[]
+  // array already covers; tiles[] is the primary source.
+  base.tileClassification = { "3,2": { col: 3, row: 2, classification: "ignored", finding: "L9" } };
+  const basePath = join(dir, "06-accuracy", "base-precedence.json");
+  writeFileSync(basePath, JSON.stringify(base));
+
+  const again = runTool(dir, ["--baseline", basePath]).report;
+  assert.equal(again.baseline.carriedClassification["2,2"].classification, "genuine-defect");
+  assert.equal(again.baseline.carriedClassification["2,2"].finding, "D1");
+  assert.equal(again.baseline.carriedClassification["3,2"].classification, "rasterization-artifact");
+});
+
+test("--baseline still reads a legacy tileClassification map when tiles[] carries none", () => {
+  const dir = makeRunDir(stable(), shifted());
+  const first = runTool(dir).report;
+  const base = JSON.parse(JSON.stringify(first));
+  base.tileClassification = [
+    { col: 2, row: 2, classification: "accepted-deviation", finding: "L1" },
+    { col: 3, row: 2, classification: "accepted-deviation", finding: "L1" },
+  ];
+  const basePath = join(dir, "06-accuracy", "base-legacy.json");
+  writeFileSync(basePath, JSON.stringify(base));
+
+  const again = runTool(dir, ["--baseline", basePath]).report;
+  assert.equal(again.baseline.carriedCount, 2);
+  assert.equal(again.baseline.carriedClassification["2,2"].source, "tileClassification");
+  assert.equal(again.baseline.carriedClassification["2,2"].finding, "L1");
+});
+
+test("--baseline does not carry a 'pass' classification onto a newly non-pass tile", () => {
+  const dir = makeRunDir(stable(), stable());
+  const clean = runTool(dir).report;
+  assert.equal(clean.summary.passPct, 100);
+  const base = accuracyBaseline(clean); // every tile classification "pass"
+  const basePath = join(dir, "06-accuracy", "base-allpass.json");
+  writeFileSync(basePath, JSON.stringify(base));
+
+  // The build regresses: tiles (2,2)/(3,2) go non-pass and must be adjudicated.
+  writeFileSync(join(dir, "06-accuracy", "build@2x.png"), PNG.sync.write(shifted()));
+  const again = runTool(dir, ["--baseline", basePath]).report;
+  assert.equal(again.baseline.carriedCount, 0);
+  assert.equal(again.baseline.uncarriedNonPass.length, again.baseline.newNonPassTiles.length);
+  assert.ok(again.baseline.uncarriedNonPass.length >= 2);
+});

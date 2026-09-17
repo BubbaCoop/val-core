@@ -17,6 +17,12 @@
  *                           comparison scale)
  *   --margin <px>           CSS px of slack around each fix region (default 2)
  *   --out <json>            report path (default <run-dir>/04-build/regression-check.json)
+ *   --list-unresolved       print every unresolved fix/sibling id instead of the
+ *                           default summary. Unresolved SIBLINGS are normal — a
+ *                           sibling is often a CSS selector with no figmaNode —
+ *                           so the console note summarises (count, fix vs
+ *                           sibling split, first few ids) and the full list
+ *                           always lives in the written report.
  *
  * Verdict: PASS when every changed cluster lies inside a fix region and no fix
  * region got worse against the reference. Without --fixlist the changed
@@ -29,7 +35,7 @@ import { parseArgs, fail, printCapped } from "./lib/args.mjs";
 import { loadRun, selectFrame, loadLayout, regionByNode, comparisonScale } from "./lib/manifest.mjs";
 import { readPng, changedClusters, boxContains, regionMismatch, cssToDeviceBox } from "./lib/png.mjs";
 
-const { positional, opts } = parseArgs(process.argv.slice(2));
+const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["list-unresolved"] });
 const runDir = positional[0];
 if (!runDir || !opts.before || !opts.after) {
   fail("Usage: node <tools-dir>/regression-check.mjs <run-dir> --before <png> --after <png> [--reference png] [--fixlist json] [--frame s] [--scale n] [--margin px] [--out json]");
@@ -140,6 +146,8 @@ if (opts.reference) {
 report.worse = worse.map((r) => ({ id: r.id, role: r.role, figmaNode: r.figmaNode, mismatch: r.mismatch }));
 
 const unresolved = fixRegions.filter((r) => r.unresolved);
+const unresolvedFix = unresolved.filter((r) => r.role === "fix");
+const unresolvedSibling = unresolved.filter((r) => r.role !== "fix");
 let verdict;
 if (!opts.fixlist) verdict = "INFO";
 else if (outOfScope.length || worse.length) verdict = "FAIL";
@@ -148,8 +156,14 @@ report.verdict = verdict;
 report.note = !opts.fixlist
   ? "no --fixlist: change footprint reported, scope not asserted"
   : unresolved.length
-    ? `${unresolved.length} fix/sibling entr${unresolved.length === 1 ? "y" : "ies"} had no box/figmaNode resolvable via layout.json — their scope could not be checked (${unresolved.map((r) => r.id).join(", ")})`
+    ? unresolvedNote()
     : null;
+report.unresolved = {
+  total: unresolved.length,
+  fix: unresolvedFix.length,
+  sibling: unresolvedSibling.length,
+  ids: unresolved.map((r) => r.id),
+};
 writeFileSync(outPath, JSON.stringify(report, null, 2));
 
 const lines = [];
@@ -168,4 +182,25 @@ process.exit(verdict === "FAIL" ? 1 : 0);
 
 function round1(n) {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * One line, not thirty-one. A fix-list entry's `siblings` are frequently CSS
+ * selectors (".va-radio-field-options") with no figmaNode, so they never
+ * resolve and naming them all buries the verdict. Summarise by default; the
+ * complete list is always in report.unresolved.ids, and --list-unresolved
+ * prints it.
+ */
+function unresolvedNote() {
+  const n = unresolved.length;
+  // Fix entries first: an unresolvable FIX is the part worth looking at.
+  const ids = [...unresolvedFix, ...unresolvedSibling].map((r) => r.id ?? r.figmaNode ?? "?");
+  const head =
+    `${n} fix/sibling entr${n === 1 ? "y" : "ies"} (${unresolvedFix.length} fix, ${unresolvedSibling.length} sibling) ` +
+    `had no box/figmaNode resolvable via layout.json — their scope could not be checked`;
+  if (opts["list-unresolved"]) return `${head}: ${ids.join(", ")}`;
+  const shown = ids.slice(0, 3);
+  const more = ids.length > shown.length ? ` (+${ids.length - shown.length} more — --list-unresolved)` : "";
+  const why = unresolvedSibling.length ? " Sibling entries are commonly CSS selectors with no figmaNode." : "";
+  return `${head}.${why} First: ${shown.join(", ")}${more}`;
 }

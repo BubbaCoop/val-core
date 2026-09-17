@@ -49,7 +49,14 @@ Generate a Playwright spec at <run-dir>/05-qa.spec.mjs containing:
    tests. Page-specific standing assertions (a progress track, a column
    that must stay centred) go in R* tests.
 
-Run it headless. Write 05-qa-report.md: a table of test → pass/fail, and
+Run it headless — and expect it to outlast a default command timeout. A suite of
+a few dozen behaviours across several states, each in a fresh browser context,
+runs for many minutes: one real run took over ten, and the agent driving it had
+its browser killed twice by per-command timeouts and stalled out, so the
+orchestrator ran the spec itself to get a report. Start the run in the background,
+or give the command an explicit timeout well above your estimate, or shard it by
+state with --only and merge. Whichever you choose, say in your report how the
+suite was run and how long it took, so the next run budgets for it. Write 05-qa-report.md: a table of test → pass/fail, and
 for each failure the selector, the expected behavior, and what actually
 happened. When a failure traces to the PROBE, fix the probe without
 loosening the expectation and log it under "Spec audit" — a wrong probe

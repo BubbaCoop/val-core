@@ -11,6 +11,120 @@ README "Releasing".
 
 ## [Unreleased]
 
+Found by a full `/val` run of a real page (Valiify Short App, BSA "Account information",
+four frames, three reworks). Each entry below names the run evidence that produced it.
+
+### Fixed — an accepted deviation excused a whole REGION, and hid a real defect in it
+
+The accuracy gate's accepted-deviations file said only *where* a difference was allowed
+(`{ id, figmaNode, note }`), so every non-pass tile in that node's region classified as
+accepted. A stretched primary button whose label was centred instead of flush left sat
+inside an entry written for a 3.6px width shift, and three consecutive accuracy runs
+passed it while the page was visibly wrong. The requester found it by looking at the page.
+The tool had done its part — it pre-labelled the finding `needs-review` and its evidence
+showed the accepted shift explaining almost none of the mismatch (7.9% direct, 7.4% after
+compensating) — and the agent overrode that. So this is fixed in three places at once:
+
+- An entry now says WHAT it excuses: `accepts: [geometry.x | geometry.y | geometry.w |
+  geometry.h | shift | colour | content | any]`. `content` and `any` are unfalsifiable by
+  measurement and the tool defers to them; everything else has to survive the numbers.
+- `classify-tiles` pre-labels `accepted-candidate` only when the evidence is consistent
+  with the claim, and otherwise sends the finding to `needs-review` with the arithmetic in
+  its rationale. Evidence gains `horizontalShift.explainedPct`; findings gain
+  `acceptedAccepts` and `acceptedExplainsEvidence`.
+- `classify-tiles --verify` audits the agent's own adjudication after the fact: it re-reads
+  `findings[]` and exits non-zero on any `accepted-deviation` whose evidence contradicts the
+  entry it cites. Composite citations (`"D10+D8"`, or `acceptedIds[]`) are judged against
+  the union of what those entries claim. Verified both ways on the real run: FAIL on the
+  adjudication that shipped the defect, naming the button and the arithmetic; PASS on all
+  four frames of the corrected one.
+- The `val-accuracy` template carries the rule, the reasoning and the audit step.
+
+**Breaking for existing accepted lists:** an entry with no `accepts` falls back to the
+general residual test, so an entry that quietly covered a colour or content change now
+surfaces for adjudication instead of passing. Add `accepts` to say what you meant.
+
+### Fixed — `classify-tiles --accepted` could not find the file the templates tell agents to pass
+
+The path resolved against the cwd alone, while the template documents a run-relative path
+run from the repo root. It now resolves against the run directory first, then the cwd. In
+the same file, `figmaNode` was keyed by its raw value, so an entry naming several nodes as
+an array silently matched none of them — arrays are now supported, and a non-string node id
+fails loudly instead of disappearing.
+
+### Added — `geometry-check --accepted`, so a deliberate deviation is reported rather than hand-hidden
+
+A page that differs from its frames on purpose — a settled ordering change, a library
+component whose real border is wider than Figma's inside stroke, a type token the surface
+mandates over the one the frame binds — could never reach the PASS the build agent's
+definition of done demanded. The real run answered that by hand-building override layout
+files, which hides the number instead of explaining it.
+
+- `--accepted <json>` takes the same file the accuracy gate reads (`frames` optionally
+  scoping an entry to particular states). A covered miss is reported `accepted` with its
+  delta and entry id — measured and printed, never silent — and does not sink the frame.
+- A region the build deliberately omits is excused the same way, reported `accepted` with
+  `notBuilt`, instead of counting as `unmapped`.
+- The `val-build` definition of done now says a PASS may include accepted regions and must
+  include no `fail` and no `unmapped`, and tells the agent not to hand-build override
+  layouts. Measured on the real run: all four frames go from FAIL to PASS with every
+  remaining difference named.
+
+### Added — the page's stylesheets are an ordered list, not one file
+
+`paths.componentCss` names a single stylesheet, and the `val-build` template told the agent
+to consume the library through it. For a library whose consumer entry is a reset followed by
+a prebuilt bundle, that resolves to the wrong file, and wrongly in a way nothing reports: an
+entry with no utility layer leaves every utility class resolving to no rule, and one that
+ships preflight resets the host. The orchestrator had to override the template by hand for
+the page to render at all.
+
+- New `paths.pageStylesheets` (ordered array) supersedes `componentCss`, which stays for
+  configs written before it. New `{{PAGE_STYLESHEETS}}` substitution; the template now says
+  to link them in order, link nothing else in their place, and why the failure is silent.
+
+### Added — guidance for the two ways this run's agents lost time
+
+- `val-qa`: a suite of a few dozen behaviours across several states runs for many minutes
+  (one took over ten), and the agent had its browser killed twice by per-command timeouts
+  and stalled. The template now says to background it, raise the timeout, or shard by state,
+  and to report how it was run and how long it took.
+- `val-build`: classes applied from JavaScript are invisible to a static class audit, and a
+  closed utility surface does not warn — an unlisted class simply produces no rule. A real
+  page's dropdown panel shipped its positioning classes only from JS. The template now says
+  to run the class gate a second time against a captured DOM with runtime states applied.
+
+### Fixed — `grid-diff --baseline` carried nothing, so every re-run re-adjudicated everything
+
+The carry-forward block read `base.tileClassification`, a key the accuracy stage has never
+written, and its fallback keyed `findings[].tiles` entries — which are `[col, row]` arrays —
+through `t.col`, collapsing all of them onto `"undefined,undefined"`. `carriedCount` was 0 on
+every real re-run and two agent sessions independently wrote their own carry-forward scripts
+around it.
+
+- `tools/grid-diff.mjs` reads `tiles[].classification` (with `tiles[].finding`) as the primary
+  source, still honours a legacy `tileClassification` map, and accepts all three tile-reference
+  spellings in `findings[].tiles` — `[col,row]`, `{col,row}`, `"col,row"`. An explicit per-tile
+  classification still beats one derived from a finding; each carried entry records its
+  `source`.
+- Tiles the baseline scored as pass are not carried: that `"pass"` mirrors the grid class rather
+  than recording an adjudication, and carrying it would hide a tile that has since regressed
+  from `uncarriedNonPass` — the exact list the accuracy agent is told to re-adjudicate.
+- Measured on a real four-frame run: 0 → 98 / 144 / 72 / 103 classifications carried, with
+  `uncarriedNonPass` dropping to 0 / 0 / 1 / 1.
+
+### Fixed — `regression-check`'s unresolved-entries note buried the verdict
+
+A fix-list entry's `siblings` are routinely CSS selectors (`.va-radio-field-options`) with no
+`figmaNode`, so they never resolve — normal and expected. Naming all of them on one line put 31
+ids between the reader and the result.
+
+- The note now summarises: count, fix-vs-sibling split, and the first few ids, with fix entries
+  listed first. `--list-unresolved` prints the full list, and `report.unresolved`
+  (`{ total, fix, sibling, ids }`) always carries it in the written JSON.
+- Output only — the PASS/FAIL logic and what counts as in scope are unchanged.
+
+
 ## [0.6.1] — 2026-09-16
 
 ### Added — `handoff-check` fails unmeasured rendering claims

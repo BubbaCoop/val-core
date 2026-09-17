@@ -9,6 +9,13 @@
  *   --tolerance <px>        allowed |Δ| per edge in CSS px (default 2)
  *   --regions <json>        selector map (default: <run-dir>/04-build/regions.json)
  *   --layout <json>         layout override (default: the frame's 01-extraction layout.json)
+ *   --accepted <json>       documented deviations, same file the accuracy gate reads
+ *                           (path resolved against the run dir first, then the cwd):
+ *                           [{ id, figmaNode?|[figmaNode], frames?: [state], note? }].
+ *                           A region whose miss is covered by an entry is reported
+ *                           `accepted`, not `fail`, and does not sink the frame. A
+ *                           region the build deliberately omits is excused the same way
+ *                           (reported `accepted` with `notBuilt`) instead of `unmapped`.
  *   --out <dir>             where to write reports (default: <run-dir>/04-build/)
  *
  * For each frame: renders 04-build/index.html at the frame's w×h (state driven
@@ -23,8 +30,16 @@
  * regions.json is written by the build agent: { "<figmaNode>": "<selector>", …,
  * "<state>": { "<figmaNode>": "<selector>" } } (per-state block optional).
  *
+ * A page that deliberately differs from its frames — a settled ordering change, a
+ * library component whose real border is wider than Figma's inside stroke, a type token
+ * the surface mandates over the one the frame binds — can never report a clean PASS, and
+ * requiring one taught earlier runs to hand-build override layouts. Pass the accepted
+ * list instead: the verdict becomes PASS when every remaining miss is traced to an entry,
+ * and the report says which.
+ *
  * Writes: <out>/geometry-<state>.json and geometry-<state>.md. Prints ≤ 30
- * lines. Exit 1 on any failure, unmapped region, console error or size miss.
+ * lines. Exit 1 on any failure, unmapped region, console error or size miss — an
+ * accepted miss is none of those.
  */
 import { chromium } from "playwright";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -35,7 +50,7 @@ import { loadRun, selectFrame, loadLayout } from "./lib/manifest.mjs";
 
 const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["all"] });
 const runDir = positional[0];
-if (!runDir) fail("Usage: node <tools-dir>/geometry-check.mjs <run-dir> [--frame s | --all] [--tolerance px] [--regions json] [--layout json] [--out dir]");
+if (!runDir) fail("Usage: node <tools-dir>/geometry-check.mjs <run-dir> [--frame s | --all] [--tolerance px] [--regions json] [--layout json] [--accepted json] [--out dir]");
 
 let run;
 try {
@@ -45,6 +60,31 @@ try {
 }
 const { runPath, frames } = run;
 const tolerance = opts.tolerance ? Number(opts.tolerance) : 2;
+
+// Documented deviations — the same file the accuracy gate reads, so a run keeps one
+// vocabulary for "we know, and it is on purpose".
+let acceptedByNode = new Map();
+let acceptedPath = null;
+if (opts.accepted) {
+  const candidates = [join(runPath, opts.accepted), resolve(opts.accepted)];
+  acceptedPath = candidates.find(existsSync) ?? null;
+  if (!acceptedPath) fail(`Accepted list not found: tried ${candidates.join(" and ")}`);
+  const raw = JSON.parse(readFileSync(acceptedPath, "utf8"));
+  const list = Array.isArray(raw) ? raw : (raw.accepted ?? []);
+  for (const a of list) {
+    for (const nodeId of Array.isArray(a.figmaNode) ? a.figmaNode : a.figmaNode ? [a.figmaNode] : []) {
+      if (typeof nodeId !== "string") fail(`Accepted entry ${a.id ?? "(unnamed)"}: figmaNode must be a string or an array of strings`);
+      if (!acceptedByNode.has(nodeId)) acceptedByNode.set(nodeId, a);
+    }
+  }
+}
+/** The entry covering this node in this frame, if any. */
+function acceptedFor(figmaNode, state) {
+  const a = acceptedByNode.get(figmaNode);
+  if (!a) return null;
+  if (Array.isArray(a.frames) && a.frames.length && !a.frames.includes(state)) return null;
+  return a;
+}
 const targets = opts.all ? frames : [selectFrame(frames, opts.frame)];
 const htmlPath = join(runPath, "04-build", "index.html");
 if (!existsSync(htmlPath)) fail(`No build page at ${htmlPath}`);
@@ -116,19 +156,50 @@ try {
         if ((await loc.count()) > 0) box = await loc.boundingBox();
       } catch {}
       if (!box) {
-        rows.push({ figmaNode: r.figmaNode, name: r.name, kind: r.kind ?? null, selector, via, status: "unmapped", expected: r, measured: null, delta: null });
+        // A region the build deliberately does not draw — a layer the requirements put
+        // out of scope, say — is excused the same way an accepted miss is, provided an
+        // entry names it. Without this, "we decided not to build that" had no spelling.
+        const accMissing = acceptedFor(r.figmaNode, frame.state);
+        rows.push({
+          figmaNode: r.figmaNode,
+          name: r.name,
+          kind: r.kind ?? null,
+          selector,
+          via,
+          status: accMissing ? "accepted" : "unmapped",
+          acceptedId: accMissing?.id ?? null,
+          acceptedNote: accMissing?.note ?? null,
+          notBuilt: !!accMissing,
+          expected: r,
+          measured: null,
+          delta: null,
+        });
         continue;
       }
       const m = { x: round2(box.x), y: round2(box.y), w: round2(box.width), h: round2(box.height) };
       const d = { dx: round2(m.x - r.x), dy: round2(m.y - r.y), dw: round2(m.w - r.w), dh: round2(m.h - r.h) };
       const ok = Object.values(d).every((v) => Math.abs(v) <= tolerance);
-      rows.push({ figmaNode: r.figmaNode, name: r.name, kind: r.kind ?? null, selector, via, status: ok ? "ok" : "fail", expected: { x: r.x, y: r.y, w: r.w, h: r.h }, measured: m, delta: d });
+      const acc = ok ? null : acceptedFor(r.figmaNode, frame.state);
+      rows.push({
+        figmaNode: r.figmaNode,
+        name: r.name,
+        kind: r.kind ?? null,
+        selector,
+        via,
+        status: ok ? "ok" : acc ? "accepted" : "fail",
+        acceptedId: acc?.id ?? null,
+        acceptedNote: acc?.note ?? null,
+        expected: { x: r.x, y: r.y, w: r.w, h: r.h },
+        measured: m,
+        delta: d,
+      });
     }
     await context.close();
 
     const failRows = rows.filter((x) => x.status === "fail");
+    const acceptedRows = rows.filter((x) => x.status === "accepted");
     const unmapped = rows.filter((x) => x.status === "unmapped");
-    const okCount = rows.length - failRows.length - unmapped.length;
+    const okCount = rows.filter((x) => x.status === "ok").length;
     const frameOk = sizeOk && noScroll && !failRows.length && !unmapped.length && !errors.length;
     if (!frameOk) anyFail = true;
 
@@ -139,7 +210,9 @@ try {
       viewport: { width, height },
       page: { ...dims, noScroll, sizeOk },
       regions: rows,
-      counts: { ok: okCount, fail: failRows.length, unmapped: unmapped.length },
+      counts: { ok: okCount, accepted: acceptedRows.length, fail: failRows.length, unmapped: unmapped.length },
+      accepted: acceptedRows.map((x) => ({ figmaNode: x.figmaNode, name: x.name, acceptedId: x.acceptedId, delta: x.delta, notBuilt: !!x.notBuilt })),
+      acceptedList: acceptedPath,
       consoleErrors: errors,
       verdict: frameOk ? "PASS" : "FAIL",
     };
@@ -147,10 +220,14 @@ try {
     writeFileSync(join(outDir, `geometry-${frame.state}.md`), toMarkdown(result));
 
     summaryLines.push(
-      `${frameOk ? "✓" : "✗"} ${frame.state}: page ${dims.w}x${dims.h} (frame ${width}x${height}) scroll:${noScroll ? "none" : "YES"} | regions ${okCount} ok / ${failRows.length} fail / ${unmapped.length} unmapped | console errors ${errors.length}`,
+      `${frameOk ? "✓" : "✗"} ${frame.state}: page ${dims.w}x${dims.h} (frame ${width}x${height}) scroll:${noScroll ? "none" : "YES"} | regions ${okCount} ok${acceptedRows.length ? ` / ${acceptedRows.length} accepted` : ""} / ${failRows.length} fail / ${unmapped.length} unmapped | console errors ${errors.length}`,
     );
     for (const x of failRows.slice(0, 12)) {
       summaryLines.push(`    ✗ ${x.name} (${x.figmaNode}) ${x.selector} — Δ dx ${x.delta.dx} dy ${x.delta.dy} dw ${x.delta.dw} dh ${x.delta.dh}`);
+    }
+    for (const x of acceptedRows.slice(0, 6)) {
+      const what = x.delta ? `Δ dx ${x.delta.dx} dy ${x.delta.dy} dw ${x.delta.dw} dh ${x.delta.dh}` : "not built";
+      summaryLines.push(`    ~ ${x.name} (${x.figmaNode}) — ${what} — accepted: ${x.acceptedId ?? "(unnamed)"}`);
     }
     for (const x of unmapped.slice(0, 6)) {
       summaryLines.push(`    ? ${x.name} (${x.figmaNode}) — no element for ${x.selector} (${x.via})`);
@@ -183,7 +260,8 @@ function toMarkdown(r) {
     const exp = `${e.x},${e.y},${e.w},${e.h}`;
     const meas = x.measured ? `${x.measured.x},${x.measured.y},${x.measured.w},${x.measured.h}` : "NOT FOUND";
     const d = x.delta ? `${x.delta.dx},${x.delta.dy},${x.delta.dw},${x.delta.dh}` : "—";
-    lines.push(`| ${x.name} | ${x.figmaNode} | \`${x.selector}\` | ${exp} | ${meas} | ${d} | ${x.status === "ok" ? "✓" : x.status === "fail" ? "✗" : "?"} |`);
+    const glyph = x.status === "ok" ? "✓" : x.status === "fail" ? "✗" : x.status === "accepted" ? `~ ${x.acceptedId ?? "accepted"}` : "?";
+    lines.push(`| ${x.name} | ${x.figmaNode} | \`${x.selector}\` | ${exp} | ${meas} | ${d} | ${glyph} |`);
   }
   lines.push("", `Console errors: ${r.consoleErrors.length ? r.consoleErrors.join("; ") : "none"}`);
   return lines.join("\n") + "\n";

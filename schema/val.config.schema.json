@@ -96,7 +96,13 @@
         "componentCss": {
           "type": "string",
           "default": "dist/index.css",
-          "description": "The built library the val page consumes."
+          "description": "The built library the val page consumes. Superseded by pageStylesheets when that is set; kept for configs written before it existed."
+        },
+        "pageStylesheets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "The stylesheets a built page must link, IN ORDER — the library's real consumer entry. A single componentCss path cannot express a load path with more than one file (a reset followed by a prebuilt bundle, say), and picking the wrong entry is silent: a bundle that ships no utility layer leaves every utility class rendering nothing, while one that ships preflight resets the host. Name here exactly what a consumer is told to load, so the pipeline measures the path that ships."
         },
         "iconSprite": {
           "type": "string",

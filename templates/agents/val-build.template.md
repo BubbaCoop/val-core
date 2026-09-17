@@ -39,7 +39,13 @@ characters of payload), and each image was re-cached on every one of its
 Produce 04-build/index.html + 04-build/styles.css. Single static page,
 vanilla HTML/CSS/JS, matching the repo's existing prototype conventions.
 Fonts via {{FONT_PACKAGES}} — {{TYPE_SYSTEM_NOTE}}.
-Consume the library through {{COMPONENT_CSS}} (component classes + tokens).
+Consume the library through {{PAGE_STYLESHEETS}} — link them in that order, and
+link nothing else in their place. That list is the library's real consumer entry,
+and the wrong entry fails SILENTLY: a bundle that ships no utility layer leaves
+every utility class resolving to no rule at all, and one that ships preflight
+resets the host it is dropped into. A page that renders through an entry no
+consumer would install measures a load path that does not ship, so the accuracy
+gate's verdict would not be about the product.
 Icons come from {{ICON_SPRITE}}, inlined per the vite-starter pattern —
 but inline ONLY the <symbol>s the page references:
   node {{TOOLS_DIR}}/sprite-subset.mjs {{ICON_SPRITE}} --used-by 04-build/index.html --out 04-build/sprite.svg
@@ -48,6 +54,15 @@ any glyph the sprite lacks — that is a sprite gap to mark val:gap, never a
 reason to inline everything). The full sprite is ~500KB / ~2,000 symbols; a prior
 page used 5 of them and shipped a 536KB index.html that every QA,
 accuracy and rework pass then had to read.
+
+A note on where classes live. When a page applies classes from JavaScript — a
+panel that only exists while open, a state class toggled at runtime — a static
+audit of the markup cannot see them, and a closed utility surface will not warn
+you: an unlisted class simply produces no rule. Whatever class gate this library
+runs, run it a second time against a captured DOM with those runtime states
+applied, and report both. A real page shipped its dropdown panel's positioning
+classes only from JS; they were verified only because someone thought to capture
+the open state.
 
 Non-negotiable rules:
 1. Where 02-component-map.json has a match, reproduce the LIBRARY
@@ -142,8 +157,22 @@ broadening it. Rework passes re-read only manifest.json, the fix list,
 the files the fix list names and self-check.md — not the extraction, not
 the requirements, not the component sources, and no images.
 
-Definition of done: page opens with zero console errors; self-check.md is
-all ✓; geometry-<state>.json reports PASS for every frame.
+Definition of done: page opens with zero console errors; self-check.md is all ✓;
+geometry-<state>.json reports PASS for every frame — where a PASS may include
+regions the accepted-deviations file excuses, and must include no `fail` and no
+`unmapped` row.
+
+On accepted deviations. A page that deliberately differs from its frames — a
+settled ordering change, a library component whose real border is wider than
+Figma's inside stroke, a type token the surface mandates over the one the frame
+binds, a layer the requirements put out of scope — cannot report a clean PASS,
+and it is not supposed to. Write those to an accepted-deviations file and pass it
+as `--accepted`: each miss is then measured, named with its entry, and reported
+as `accepted` rather than swallowed. Do NOT hand-build an override layout to make
+a frame go green; that hides the number instead of explaining it, and the next
+reader cannot tell the difference between a deviation and a defect. If a miss has
+no entry and no explanation, it is a defect — say so in your report rather than
+widening the tolerance.
 
 End with exactly one line — BLOCKED when questions.md is non-empty:
 BUILD: OK|BLOCKED | COMPONENTS: <n> | BEHAVIORS-WIRED: <n> | GAPS: <n> | QUESTIONS: <n>
