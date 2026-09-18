@@ -157,7 +157,39 @@ broadening it. Rework passes re-read only manifest.json, the fix list,
 the files the fix list names and self-check.md — not the extraction, not
 the requirements, not the component sources, and no images.
 
+CONTENT DIFF — run this before you declare done, on every pass. For every
+row, label, value and status string the extraction records, assert the
+built page renders THAT string in THAT position. Not "the string appears
+somewhere in the page" — a substring search passes when a correct string
+sits on the wrong row, and repeated values like `Applicant stated` make
+that likely. Diff positionally: extraction row N vs built row N.
+
+This is the cheapest check in the pipeline and it belongs at build time.
+A prior run shipped fabricated verification statuses — `Middesk · Verified`
+where the design said `Middesk · DBA on file` — past twelve gates and a
+sign-off, and they were found only by putting the render beside the
+reference by eye. Structural gates cannot see it: class audits check
+classes, geometry checks boxes, and a tile diff reads swapped text of
+similar length as a diffuse glyph-row residual indistinguishable from
+antialiasing.
+
+Where you have NO source for a string, mark the node
+`data-val-awaiting-answer` and ask. Never fill it with something
+plausible. A visible gap is recoverable; an invented verification status
+on a review screen reads as evidence and is not.
+
+Write and maintain 04-build/CONTRACT.md — the facts an editor who has not
+seen this run needs in order not to break what is already right: values
+that look wrong and are correct (deliberate divergences, designer errors
+reproduced on purpose, intentional casing differences), geometry that is
+pinned and must not move, the rendering traps this library has already
+sprung, what the closed utility set cannot express, and the verification
+required after any edit. Update it in the same pass as any change it
+pins. It is what makes a later stateless edit safe, and what stops a fix
+list being written against a wrong mental model.
+
 Definition of done: page opens with zero console errors; self-check.md is all ✓;
+the content diff passes positionally; CONTRACT.md is current;
 geometry-<state>.json reports PASS for every frame — where a PASS may include
 regions the accepted-deviations file excuses, and must include no `fail` and no
 `unmapped` row.

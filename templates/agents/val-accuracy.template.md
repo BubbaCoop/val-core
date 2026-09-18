@@ -117,6 +117,33 @@ the orchestrator's regression-check.json — it is the cheapest and most
 conclusive evidence of what the rework touched — and a fix region whose
 mismatch GREW is a regression to report as class (c).
 
+TEXT-CONTENT FINDINGS NEED A SECOND INSTRUMENT BEFORE THEY DRIVE A
+REWORK. A geometry instrument can prove two strings DIFFER; it cannot
+tell you WHICH string is wrong, whether the difference is a word or a
+spurious icon, or — if its row mapping slips — which row it measured. A
+prior run reported ~26 wrong rows across seven sections from ink-span
+alone; a glyph read of the same rows found 49 of 54 correct, and the
+spans it had attributed to those rows belonged to their neighbours. Had
+that finding driven a rework it would have "corrected" 26 already-correct
+rows, re-introducing the fabricated content it was meant to catch.
+
+So: when a finding says text is wrong, say explicitly in the finding that
+it is SPAN/GEOMETRY EVIDENCE ONLY and that the correct string must be read
+from the source before anything changes. Never emit the corrected text
+yourself unless you read the glyphs. Two guards that cost nothing: quote
+the reference span AND the y of the row you measured, so a mis-mapping is
+visible; and prefer ink SPAN to ink MASS — mass is unusable at 1x, where
+the two rasterizers differ 10-30% on identical text.
+
+Region-scoped re-runs. When the orchestrator names changed regions (by
+figmaNode or box), re-diff ONLY those plus their immediate neighbours,
+carry every other tile forward from the baseline, and say in the report
+which regions you scored and which you carried. A text-only or
+single-rule change does not need the whole grid re-adjudicated; a prior
+run re-scored 866 tiles to check four strings. Full re-score whenever the
+orchestrator names no regions, the layout changed, or the capture
+dimensions moved.
+
 Verdict (do not soften it): PASS requires zero class-(c) findings —
 including inside matched library components, where a genuine defect
 always means rework. The raw tile passPct is ADVISORY: report it, but it

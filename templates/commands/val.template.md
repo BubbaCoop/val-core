@@ -56,6 +56,23 @@ Invoke, in order (2 and 3 may run after 1 in either order):
 At each gate:
 - Parse the agent's final status line. Check its outputs exist and meet
   the definition of done stated in its agent file.
+- **Run deterministic checks yourself; they cost no model tokens.** Once
+  an artifact exists — a spec, a gate script, a diff tool — executing it
+  needs no agent. Re-run the repo's gates, the QA spec, regression-check
+  and any pixel sampling from the orchestrator rather than dispatching
+  for them. A prior run executed a 72-test Playwright suite directly in
+  ~3.5 minutes for ZERO model tokens after its QA agent stalled, having
+  already spent ~700k agent tokens on earlier runs of the same file. An
+  agent is needed to WRITE a check and to INTERPRET a failure, not to
+  run one. This is also how you verify against the artifact rather than
+  the report: a gate you ran yourself cannot be misreported to you.
+- **Agents resumed with SendMessage accumulate context monotonically.**
+  In one run the build lane went 352k → 545k tokens across eight passes
+  while the passes themselves shrank to 5-7 tool calls; the context, not
+  the edit, was ~99% of the spend. Resume when the agent's accumulated
+  knowledge is the point (it will catch its own earlier mistakes, and
+  defend a decision structurally). Start cold — with 04-build/CONTRACT.md
+  as the carrier of the invariants — when the task is a small, scoped edit.
 - Append to manifest.gates:
   { "gate", "agent", "status": "pass"|"rework", "at": ISO, "notes" }.
 - On failure: re-invoke the SAME agent once with the specific deficiency.
@@ -108,6 +125,18 @@ Gate 4 BUILD: BLOCKED with 04-build/questions.md):
 
 ## Rework loop
 If Gate 5 fails, or Gate 6 fails its verdict:
+0. **Corroborate before you dispatch.** A finding drives a rework only
+   when a SECOND, DIFFERENT instrument agrees, whenever the first one is
+   inferring content from geometry. Span, ink mass, tile mismatch and
+   bbox deltas all prove that two things DIFFER; none of them can say
+   which is wrong, whether the difference is a word or an icon, or which
+   row was measured. A prior run reported ~26 wrong rows from ink-span
+   alone; a glyph read found 49 of 54 correct, and the spans belonged to
+   neighbouring rows. Dispatching it would have "corrected" 26 correct
+   rows and re-introduced the fabricated content the finding was meant to
+   catch. The second instrument is usually cheap — a targeted read, a
+   pixel sample, a string diff — and always cheaper than the rework.
+   Geometry findings (a box moved, a colour differs) need no second pass.
 1. **Batch before reworking.** If Gate 5's only failures are minor or
    cosmetic (a missing hover, a wrong token on one element — nothing that
    would invalidate the accuracy measurement itself), do NOT dispatch a
@@ -120,7 +149,19 @@ If Gate 5 fails, or Gate 6 fails its verdict:
 2. Increment manifest.reworkCount. If it exceeds 3: stop looping, mark
    the run "needs-human-review", proceed to the writeup listing what
    remains wrong.
-3. Build a targeted fix list from the QA failures and/or accuracy
+3. **Read 04-build/CONTRACT.md before writing the fix list**, and state
+   the remedy in terms of the MEASUREMENT, not your theory of the cause.
+   You are usually right about where the reference draws something and
+   often wrong about which element owns it. A prior run measured a
+   missing hairline correctly and then instructed "copy the Registration
+   rule to the owner sections" — but the owner hairline belongs to a
+   group row 31px inside the body, not to the section edge, so following
+   the instruction would have re-painted a seam that already existed and
+   still missed the one measured. The build agent caught it by measuring
+   the boxes first. Give the evidence and the scope; let the builder
+   diagnose. And say explicitly when an entry is unconfirmed rather than
+   letting a guess travel as a requirement.
+   Build a targeted fix list from the QA failures and/or accuracy
    findings. Every entry: { id, component, figmaNode, location,
    expected, actual, suspectedCause, selectorScope, siblings }.
    selectorScope is the exact selector the change may touch ("the label

@@ -76,8 +76,27 @@ full). The orchestrator states the tier in its invocation:
 When in doubt, or when the stated tier conflicts with what the diff shows
 changed, run FULL and say so.
 
+Every probe REPORTS WHAT IT MEASURED, not just its verdict. Print the
+coordinate, the computed value, the selector it resolved, or the count,
+beside the pass. `✓ seam painted` hides a bug; `✓ seam @y2131 = 246`
+cannot. This is not optional polish. Three separate instruments in one
+prior run returned "pass" while measuring something true and irrelevant:
+an `href` attribute that was correct while its symbol did not exist in
+the sprite (eight glyphs rendered as nothing); a seam sampled at
+`section bottom − 1`, which for two of four sections was a real pixel
+430px from the seam under test; and an ink-mass comparison that flagged
+66 of 70 rows both before AND after the fix that corrected them. Each
+verdict was right about the wrong thing, and printing the coordinate
+would have exposed every one immediately.
+
+An attribute assertion is NOT a rendering assertion. `href="#icon"` being
+correct says nothing about whether that symbol exists or has children; a
+class being present says nothing about whether its glyph draws. When the
+thing under test is visual, measure the rendered result — ink box, sampled
+pixel, resolved symbol — and say in the report which you used.
+
 Definition of done: every behaviors.json entry has a result; standing
-checks all executed.
+checks all executed; every probe's output names what it measured.
 
 End with exactly one line:
 QA: PASS|FAIL | TESTS: <n> | FAILURES: <n>

@@ -11,6 +11,84 @@ README "Releasing".
 
 ## [Unreleased]
 
+From a Dashboard run of Business Account Review (two frames, eight build passes,
+four reworks). Every entry is about **measurement**: in that run four defects
+passed every structural gate, and two findings that drove work were themselves
+wrong.
+
+### Added — `val-edit`, a stateless agent for scoped edits
+
+Resuming `val-build` for a small change carries the whole run forward. The build
+lane grew **352k → 545k tokens** across eight passes while the passes themselves
+shrank to 5–7 tool calls: a four-item edit cost 545k, ~99% of it accumulated
+context. `val-edit` starts cold from three inputs — the page, the fix list, and
+`04-build/CONTRACT.md` — with a 10-tool-use budget and no access to the extraction,
+requirements or methodology. `val-build` still owns initial builds and structural
+rework, where the accumulated context is the point.
+
+### Added — `04-build/CONTRACT.md`, written and maintained by `val-build`
+
+The invariants a later editor needs and cannot re-derive: values that look wrong
+and are correct (deliberate divergences, reproduced designer errors, intentional
+casing differences), pinned geometry, the rendering traps the library has already
+sprung, what the closed utility set cannot express, and the verification required
+after any edit. It is what makes a cold edit safe, and what stops a fix list being
+written against a wrong mental model.
+
+### Added — a content diff at build time
+
+The run shipped **fabricated verification statuses** (`Middesk · Verified` where the
+design said `Middesk · DBA on file`) past twelve gates and a sign-off. Structural
+gates cannot see it: class audits check classes, geometry checks boxes, and a tile
+diff reads swapped text of similar length as a diffuse glyph-row residual
+indistinguishable from antialiasing. `val-build` now diffs every extraction string
+against its own row **positionally** — a substring search passes when a correct
+string sits on the wrong row — and marks unsourced strings
+`data-val-awaiting-answer` rather than filling them plausibly.
+
+### Fixed — instruments that report a verdict without reporting what they measured
+
+Three instruments returned "pass" while measuring something true and irrelevant: an
+`href` attribute that was correct while its symbol did not exist in the sprite
+(eight glyphs rendered as nothing); a seam sampled at `section bottom − 1`, which
+for two of four sections was a real pixel 430px from the seam under test; and an
+ink-mass comparison that flagged 66 of 70 rows both before AND after the fix that
+corrected them. `val-qa` and `val-edit` now require every probe to print the
+coordinate, value or resolved selector beside its pass, and state that an attribute
+assertion is not a rendering assertion.
+
+### Fixed — geometry findings driving content reworks
+
+`val-accuracy` reported ~26 wrong rows across seven sections from ink-span alone; a
+glyph read of the same rows found **49 of 54 correct**, the spans having been
+attributed to neighbouring rows. Dispatching it would have "corrected" 26 correct
+rows and re-introduced the fabricated content the finding was meant to catch. The
+orchestrator now requires a **second, different instrument** before any
+geometry-inferred content finding drives a rework, and `val-accuracy` must label
+such findings as span/geometry evidence only and never emit corrected text it has
+not read.
+
+### Added — region-scoped accuracy re-runs, and orchestrator-run deterministic gates
+
+`val-accuracy` gains a region-scoped mode mirroring `val-qa`'s tiers (one run
+re-scored 866 tiles to check four strings). The orchestrator is told to execute
+deterministic checks itself: a 72-test Playwright suite ran in ~3.5 minutes for
+**zero model tokens** after the QA agent stalled, against ~700k agent tokens spent
+on earlier runs of the same file. An agent is needed to WRITE a check and to
+INTERPRET a failure, not to run one.
+
+### Fixed — fix lists that state a theory instead of a measurement
+
+An orchestrator measured a missing hairline correctly, then instructed "copy the
+Registration rule to the owner sections" — but the owner hairline belongs to a group
+row 31px inside the body, not the section edge, so the instruction would have
+re-painted an existing seam and still missed the measured one. The build agent
+caught it by measuring first. The orchestrator now reads `CONTRACT.md` before
+writing a fix list, states remedies in terms of the measurement, and marks
+unconfirmed entries as unconfirmed.
+
+## [0.7.0] — 2026-09-17
+
 Found by a full `/val` run of a real page (Valiify Short App, BSA "Account information",
 four frames, three reworks). Each entry below names the run evidence that produced it.
 
