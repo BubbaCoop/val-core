@@ -20,7 +20,8 @@
  * whose Figma names don't equal the registry key — "Button / Standard",
  * "Box action", "Application Status"…) in an existing components.json are
  * MERGED (union), never overwritten. Generated fields (path, story,
- * variants, props) are refreshed.
+ * variants, props) are refreshed — except that a `variants` axis only the
+ * existing file has (a hand-added Figma boolean axis) is kept.
  *
  * Extraction is deliberately partial rather than clever: variants come from
  * argTypes `options` arrays, props from argTypes/args keys, behaviors from
@@ -35,6 +36,7 @@ import {
   mkdirSync,
 } from "node:fs";
 import { join, resolve, dirname, basename } from "node:path";
+import { parseOptionValues, mergeVariants } from "./lib/registry-merge.mjs";
 
 const repoRoot = resolve(process.argv[2] ?? process.cwd());
 
@@ -122,9 +124,7 @@ function parseArgTypes(argTypesBlock) {
     if (!entryBody) continue;
     const optMatch = entryBody.match(/options:\s*\[([\s\S]*?)\]/);
     if (optMatch) {
-      const values = [...optMatch[1].matchAll(/["'`]([^"'`]+)["'`]/g)].map(
-        (v) => v[1],
-      );
+      const values = parseOptionValues(optMatch[1]);
       if (values.length) variants[argName] = values;
     }
   }
@@ -277,6 +277,7 @@ if (existsSync(outPath)) {
       const merged = [...new Set([...(next[field] ?? []), ...(prev[field] ?? [])])];
       next[field] = merged;
     }
+    next.variants = mergeVariants(next.variants, prev.variants);
   }
 }
 

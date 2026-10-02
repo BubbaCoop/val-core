@@ -101,7 +101,7 @@ M7b. CONFLICTS GO IN UNSURE, ALWAYS. Where a brief value disagrees with somethin
 
 M8. COPY. Supplied copy verbatim (typos noted in Unsure). Missing copy
    drafted per §8 — sentence case, second person, the why in one sentence,
-   format placeholders, uppercase only via the type-* utility — and marked
+   format placeholders, casing per the library rule ({{CASING_RULE}}) — and marked
    DRAFT in the copy table and with `data-copy-source="DRAFT"` in the
    concept. Legal/consent copy is never drafted (BLOCKING question).
 M9. A COPY ELEMENT CONTAINS THE COPY AND NOTHING ELSE. An element carrying

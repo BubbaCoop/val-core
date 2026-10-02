@@ -112,3 +112,33 @@ test("the three refusals are distinguishable from one another", () => {
   // and each names the key or value actually at fault, not just "invalid config"
   assert.doesNotMatch(messages[1], /classSpelling is required/, "the reverse direction must not reuse the forward message");
 });
+
+// ---- typography.casingRule --------------------------------------------------------------
+
+function runWithTypography(typography) {
+  const dir = mkdtempSync(join(tmpdir(), "val-init-"));
+  mkdirSync(join(dir, "val"), { recursive: true });
+  const config = { ...baseConfig(), typography, pipelines: { design: true, extract: true } };
+  writeFileSync(join(dir, "val", "config.json"), JSON.stringify(config, null, 2));
+  const r = spawnSync(process.execPath, [INIT], { encoding: "utf8", cwd: dir });
+  const read = (f) => readFileSync(join(dir, ".claude", "agents", f), "utf8");
+  return { ...r, message: r.stderr + r.stdout, read };
+}
+
+test("without casingRule both casing lines keep the type-* utility rule", () => {
+  const r = runWithTypography({});
+  assert.equal(r.status, 0, r.message);
+  assert.match(r.read("extract-synthesis.md"), /Casing: an uppercase style ships through a `type-\*` utility/);
+  assert.match(r.read("design-concept-architect.md"), /casing per the library rule \(an uppercase style ships through a `type-\*` utility/);
+});
+
+test("a configured casingRule replaces the type-* rule in both agents", () => {
+  const rule = "caps are typed; there is no type-utility";
+  const r = runWithTypography({ casingRule: rule });
+  assert.equal(r.status, 0, r.message);
+  for (const f of ["extract-synthesis.md", "design-concept-architect.md"]) {
+    const text = r.read(f);
+    assert.ok(text.includes(rule), `${f} does not carry the configured rule`);
+    assert.doesNotMatch(text, /`type-\*` utility/, `${f} still names the type-* utility`);
+  }
+});

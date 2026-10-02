@@ -205,6 +205,14 @@
             "tabular-nums (the system is Inter-only; no mono register exists)",
             "JetBrains Mono + tabular-nums"
           ]
+        },
+        "casingRule": {
+          "type": "string",
+          "description": "How uppercase text ships in this library. Substituted verbatim into extract-synthesis (the Type mapping) and design-concept-architect (M8 copy). Omit for a library whose uppercase styles are bundled into `type-*` utilities — that is the default. Set it when the library has no such utility, so agents stop flagging one.",
+          "examples": [
+            "an uppercase style ships through a `type-*` utility that bundles the transform — never typed caps, never a bare `uppercase`",
+            "no text style carries a transform and the library has no `type-*` utility — caps are typed into the string exactly where Figma types them; never add `uppercase`"
+          ]
         }
       }
     },

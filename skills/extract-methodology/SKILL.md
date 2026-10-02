@@ -107,12 +107,16 @@ is a defect.
   Whole-px Figma spacing maps to native steps (8 → `p-2`); half-pixels use
   arbitrary syntax (`p-[7.5px]` — the multiplier form does not compile).
 - **`--text-*` tokens carry neither font-family nor text-transform.** Mono
-  styles need an explicit `font-mono`; uppercase label styles need a paired
-  `type-*` utility that bundles the casing.
-- **Casing is a styled transform, not typed caps** — until a component
-  proves otherwise. Figma samples are typically typed mixed-case; whether a
-  style carries an uppercase transform is settled per component from the
-  render, then recorded in the token file.
+  styles need an explicit `font-mono`. How an uppercase style ships is the
+  library's rule — `typography.casingRule` in `val/config.json`, rendered
+  into the extract agents: a paired `type-*` utility that bundles the
+  transform where the library has them, typed caps where it does not.
+- **Casing is settled per component, never assumed either way.** Read the
+  bound style's text case (ORIGINAL means no transform, so caps in the
+  render were typed into the string), then confirm against the render, and
+  record it in the token file. Libraries differ: the Short App's eyebrow and
+  label styles carry a transform, while every Dashboard Rev3 set types its
+  caps and no Dashboard style carries one.
 - **Styles named "- Bold" often resolve to Medium/500.** Read the weight
   the style reports; never map the name.
 - **Figma's `Text` / `BG` groups map to public prefixes that avoid
