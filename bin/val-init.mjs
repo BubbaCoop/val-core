@@ -209,6 +209,9 @@ const substitutions = {
     typography.systemNote ??
     `use only the faces and text styles ${paths.designSystemSkill} defines`,
   DATA_TYPOGRAPHY_RULE: typography.dataRule ?? "tabular-nums",
+  CASING_RULE:
+    typography.casingRule ??
+    "an uppercase style ships through a `type-*` utility that bundles the transform — never typed caps, never a bare `uppercase`",
   AUDIENCE_NOTE:
     config.audience ??
     `identify the audience/register the page serves (this selects which component families apply).`,

@@ -80,7 +80,7 @@ worked example: [val.config.example.json](val.config.example.json).
 | `library.name` / `displayName` / `figmaFileKey` | run manifests, agent prose, the extract lanes' file key |
 | `paths.designSystemSkill` | the library-specific skill the build and synthesis agents read (**required**; stays in the library repo) |
 | `paths.*` (registry, tokens, css, sprite, stories, runs, tools, …) | every repo path the agents reference; defaults match the Valiify layout |
-| `typography.fonts` / `systemNote` / `dataRule` | the one place the libraries' design systems change agent behaviour (Inter-only vs Inter + JetBrains Mono) |
+| `typography.fonts` / `systemNote` / `dataRule` / `casingRule` | the one place the libraries' design systems change agent behaviour (Inter-only vs Inter + JetBrains Mono; `type-*` casing utilities vs typed caps) |
 | `audience` | the register sentence in requirements §1 |
 | `pipelines.val` / `pipelines.extract` | generate one pipeline or both |
 
@@ -152,7 +152,8 @@ the manifest's `input.frames[]` (its files live under `…/frames/<state>/`).
   probe hooks go in the module named by `paths.qaProbes` (optional).
 - `generate-registry.mjs [repo-root]` — Storybook stories → component
   registry; reads paths from `val/config.json`; hand-added enrichment
-  survives regeneration.
+  (behaviors, tokens, Figma ids and names, and variant axes the stories
+  cannot express) survives regeneration.
 
 Tested: `npm test` (pixel tools with fixtures; geometry-check and the QA
 harness against headless Chromium — skipped if it is not installed).

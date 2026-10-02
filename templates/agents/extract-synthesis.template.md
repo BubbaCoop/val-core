@@ -58,8 +58,8 @@ Produce the mapping:
   own `rounded-full` where the shape is a true circle with nothing bound.
   Never `rounded-xs/sm/md`.
 - **Type** → `--text-*` token if one matches; flag mono styles as needing
-  `font-mono` and uppercase styles as needing a `type-*` utility. If the
-  style is unbound/raw, say so — do not force-fit a token.
+  `font-mono`. Casing: {{CASING_RULE}}. If the style is unbound/raw, say
+  so — do not force-fit a token.
 - **Trap flags** — check every one, explicitly:
   - fractional stroke width → inset `box-shadow`, never `border` (Chrome
     floors fractional border-width)

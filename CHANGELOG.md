@@ -11,6 +11,48 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-02
+
+From the Dashboard library's 0.5.0 release, which had to wrap the registry
+generator to get a correct registry and whose Rev3 type scale has no `type-*`
+utilities.
+
+### Fixed — the registry generator misread `options` arrays
+
+`generate-registry.mjs` matched option values with a quoted-string pattern that
+needed at least one character. An empty `""` option (a control's "none" choice)
+paired its closing quote with the next value's opening one, so every later value
+became `", "`; numeric options (`options: [1, 3, 5]`) produced no variant at all.
+Values are now tokenized whole: strings of any length and numbers, stored as
+strings, with an empty string dropped.
+
+### Fixed — regeneration dropped hand-added variant axes
+
+The merge kept hand-added `behaviors`, `tokens`, `figmaNodeIds` and `figmaNames`
+but always overwrote `variants`. Figma boolean axes (an Error or Search variant)
+have no `options` array to derive from, so they can only be hand-added, and every
+rerun deleted them. An axis only the existing registry has is now kept;
+regenerated axes still win. Covered by `tools/generate-registry.test.mjs`, which
+fails against the 0.8.0 generator.
+
+### Added — `typography.casingRule` (optional config key)
+
+`extract-synthesis` told agents to flag uppercase styles as needing a `type-*`
+utility, and `design-concept-architect` said "uppercase only via the type-*
+utility". A library with no such utility (the Dashboard, since its Rev3 scale
+types every caps string) was being steered wrong. Both lines now render
+`{{CASING_RULE}}`; the default, when the key is absent, is the old `type-*` rule,
+so a library that has those utilities generates the same instruction.
+
+### Changed — `extract-methodology` no longer presumes a styled transform
+
+"Casing is a styled transform, not typed caps — until a component proves
+otherwise" is now "settled per component, never assumed either way": read the
+bound style's text case, confirm against the render, and follow the library's
+`casingRule`.
+
+## [0.8.0] — 2026-09-17
+
 From a Dashboard run of Business Account Review (two frames, eight build passes,
 four reworks). Every entry is about **measurement**: in that run four defects
 passed every structural gate, and two findings that drove work were themselves
