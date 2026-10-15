@@ -212,6 +212,9 @@ const substitutions = {
   CASING_RULE:
     typography.casingRule ??
     "an uppercase style ships through a `type-*` utility that bundles the transform — never typed caps, never a bare `uppercase`",
+  HEIGHT_RULE:
+    config.sizing?.heightRule ??
+    "pin the authored frame height (`h-*` for native steps, arbitrary `h-[Npx]` otherwise) — never derive a control's height from padding + line-height.",
   AUDIENCE_NOTE:
     config.audience ??
     `identify the audience/register the page serves (this selects which component families apply).`,

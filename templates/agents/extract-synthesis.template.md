@@ -54,6 +54,7 @@ Produce the mapping:
 - **Spacing/size** → native Tailwind steps (whole px: 8 → `p-2`/`size-2`,
   20 → `size-5`); half-pixels get arbitrary syntax (`p-[7.5px]` — multiplier
   forms do not compile). Show the utility per value.
+  Control heights: {{HEIGHT_RULE}}
 - **Radii** → role tokens where a Figma radius variable is bound; Tailwind's
   own `rounded-full` where the shape is a true circle with nothing bound.
   Never `rounded-xs/sm/md`.

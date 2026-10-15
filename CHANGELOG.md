@@ -11,6 +11,30 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-15
+
+### Added
+
+- **`sizing.heightRule` config key + `{{HEIGHT_RULE}}` placeholder** in the
+  extract-synthesis template: a library whose design system defines control
+  height tokens states the mapping in its own config (the Short App's
+  32/40/48/56 → `var(--height-*)`); the default keeps the agnostic rule (pin
+  the authored frame height; never padding + line-height). Library prose
+  stays out of templates, so the dashboard is untouched.
+
+### Changed
+
+- `skills/extract-methodology`: the "Error ramp sits unused — an authoring
+  slip" pattern is rewritten library-neutrally. Error-family ramps can be
+  split deliberately (the Short App consumes red `Error/Base` for destructive
+  actions, decision 2026-10-15, while field errors stay amber); extractions
+  check the library's decision record before flagging.
+- `val.config.example.json`: "loading state" removed from the `§13-open-item`
+  stop trigger — @valiify/shortapp-ui 1.4.1 specifies it (aria-busy spinner,
+  width-stable).
+- Internal docs/tickets annotated where their shortapp-ui counts were
+  1.3.0-era (1.4.1: 31 components, 173 component classes, 297 utilities).
+
 ## [0.9.0] — 2026-10-02
 
 From the Dashboard library's 0.5.0 release, which had to wrap the registry

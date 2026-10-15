@@ -151,7 +151,7 @@
           },
           {
             "trigger": "§13-open-item",
-            "when": "loading state, conditional-reveal indent value, progress-bar track colour, roles-matrix label type, owner-row height on mobile"
+            "when": "conditional-reveal indent value, progress-bar track colour, roles-matrix label type, owner-row height on mobile"
           },
           {
             "trigger": "brief-missing-field",

@@ -132,8 +132,12 @@ spec, list for the designer:
 
 - **`Primary/Focus` is the literal name of the PRESSED fill** — wire to
   `:active`, never `:focus-visible`.
-- **Error states bind the Warning (amber) ramp** while a full Error ramp
-  sits unused. An authoring slip; ship verbatim until rebound.
+- **Error-family ramps can be SPLIT deliberately — check the library's
+  decision record before calling a binding a slip.** Both files bind the
+  amber Warning ramp on field errors; the Short App additionally consumes
+  the red Error ramp for destructive actions only (ListItem Critical,
+  decision 2026-10-15). Ship verbatim either way; flag to the designer only
+  when the library's designer list records no decision.
 - **Hover and pressed byte-identical** (0-diff) on a variant pair — one
   rule, designer list.
 - **Sample-hug widths** (239, 214, 509) are not specs — width is the

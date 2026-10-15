@@ -1,5 +1,7 @@
 # Ticket: split `class-audit` into a sanction engine and a surface profile, and read `class-manifest.json`
 
+> 2026-10-15: counts in this ticket are 1.3.0-era; 1.4.1 ships 173 component classes / 297 utilities. The mechanism is unchanged.
+
 **Status:** open · **Raised:** 2026-09-16 · **Repo:** `@valiify/val-core` (this repo)
 **Affected version:** 0.6.1 · **Order:** 3 of 3 (pipeline convergence) — largest, least urgent
 **Severity:** medium — `/val` has no class checking at all, but its accuracy gate catches most
@@ -77,7 +79,7 @@ Both libraries publish a machine-readable vocabulary and **val-core references i
 
 | library | export | components | utilities | declares |
 |---|---|---|---|---|
-| shortapp-ui 1.3.0 | `./manifest` | 146 | 281 | `classPrefix`, `componentNamespace`, `utilityPrefix` |
+| shortapp-ui 1.3.0 (1.4.1: 173/297) | `./manifest` | 146 | 281 | `classPrefix`, `componentNamespace`, `utilityPrefix` |
 | dashboard-ui 0.2.1 | `./manifest` | 313 | 306 | same |
 
 `class-audit` currently re-derives the same facts by parsing `src/components/*.css` and

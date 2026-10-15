@@ -24,7 +24,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Machine name — used in run ids and generated headers.",
+          "description": "Machine name \u2014 used in run ids and generated headers.",
           "pattern": "^[a-z][a-z0-9-]*$",
           "examples": [
             "shortapp",
@@ -33,7 +33,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "Human name used in agent prose ('the Short App type system…').",
+          "description": "Human name used in agent prose ('the Short App type system\u2026').",
           "examples": [
             "Short App",
             "Dashboard"
@@ -46,18 +46,23 @@
         },
         "figmaFileName": {
           "type": "string",
-          "description": "Optional — the Figma file's title, for prose only."
+          "description": "Optional \u2014 the Figma file's title, for prose only."
         },
         "classPrefix": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
           "description": "The library's class identity, when it has one: component classes are namespaced `<p>-` (.va-btn) and utilities carry the Tailwind v4 prefix `<p>:` (va:flex). Passed to class-audit as --class-prefix. Omit for an unprefixed library.",
-          "examples": ["va"]
+          "examples": [
+            "va"
+          ]
         },
         "classSpelling": {
           "type": "string",
-          "enum": ["tolerant", "strict"],
-          "description": "REQUIRED when classPrefix is set, and rejected without it. There is deliberately no default: a weakened gate must never be implicit. 'strict' rejects the unprefixed spelling and is what a library runs once its rename has shipped; 'tolerant' sanctions the pre- and post-rename spellings alike, and is for the duration of a rename only — leaving it tolerant forever trades one drift problem for another. Rendered into the generated class-audit commands as --class-strict when 'strict'."
+          "enum": [
+            "tolerant",
+            "strict"
+          ],
+          "description": "REQUIRED when classPrefix is set, and rejected without it. There is deliberately no default: a weakened gate must never be implicit. 'strict' rejects the unprefixed spelling and is what a library runs once its rename has shipped; 'tolerant' sanctions the pre- and post-rename spellings alike, and is for the duration of a rename only \u2014 leaving it tolerant forever trades one drift problem for another. Rendered into the generated class-audit commands as --class-strict when 'strict'."
         },
         "package": {
           "type": "string",
@@ -79,7 +84,7 @@
       "properties": {
         "designSystemSkill": {
           "type": "string",
-          "description": "The library-specific design-language skill (components, tokens, casing rules). Stays in the library repo — never in val-core.",
+          "description": "The library-specific design-language skill (components, tokens, casing rules). Stays in the library repo \u2014 never in val-core.",
           "examples": [
             ".claude/skills/valiify-shortapp-ui/SKILL.md"
           ]
@@ -100,9 +105,11 @@
         },
         "pageStylesheets": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 1,
-          "description": "The stylesheets a built page must link, IN ORDER — the library's real consumer entry. A single componentCss path cannot express a load path with more than one file (a reset followed by a prebuilt bundle, say), and picking the wrong entry is silent: a bundle that ships no utility layer leaves every utility class rendering nothing, while one that ships preflight resets the host. Name here exactly what a consumer is told to load, so the pipeline measures the path that ships."
+          "description": "The stylesheets a built page must link, IN ORDER \u2014 the library's real consumer entry. A single componentCss path cannot express a load path with more than one file (a reset followed by a prebuilt bundle, say), and picking the wrong entry is silent: a bundle that ships no utility layer leaves every utility class rendering nothing, while one that ships preflight resets the host. Name here exactly what a consumer is told to load, so the pipeline measures the path that ships."
         },
         "iconSprite": {
           "type": "string",
@@ -192,7 +199,7 @@
         },
         "systemNote": {
           "type": "string",
-          "description": "One sentence appended after the font list in the build agent — the type-system constraint it must respect.",
+          "description": "One sentence appended after the font list in the build agent \u2014 the type-system constraint it must respect.",
           "examples": [
             "the Short App type system is INTER-ONLY (all 24 text styles; there is no mono register in this design system)",
             "Inter for UI, JetBrains Mono strictly for verifiable data"
@@ -200,7 +207,7 @@
         },
         "dataRule": {
           "type": "string",
-          "description": "How verifiable data (IDs, amounts, percentages) is set. Substituted verbatim into val-build rule 4 and val-context §4.",
+          "description": "How verifiable data (IDs, amounts, percentages) is set. Substituted verbatim into val-build rule 4 and val-context \u00a74.",
           "examples": [
             "tabular-nums (the system is Inter-only; no mono register exists)",
             "JetBrains Mono + tabular-nums"
@@ -208,19 +215,33 @@
         },
         "casingRule": {
           "type": "string",
-          "description": "How uppercase text ships in this library. Substituted verbatim into extract-synthesis (the Type mapping) and design-concept-architect (M8 copy). Omit for a library whose uppercase styles are bundled into `type-*` utilities — that is the default. Set it when the library has no such utility, so agents stop flagging one.",
+          "description": "How uppercase text ships in this library. Substituted verbatim into extract-synthesis (the Type mapping) and design-concept-architect (M8 copy). Omit for a library whose uppercase styles are bundled into `type-*` utilities \u2014 that is the default. Set it when the library has no such utility, so agents stop flagging one.",
           "examples": [
-            "an uppercase style ships through a `type-*` utility that bundles the transform — never typed caps, never a bare `uppercase`",
-            "no text style carries a transform and the library has no `type-*` utility — caps are typed into the string exactly where Figma types them; never add `uppercase`"
+            "an uppercase style ships through a `type-*` utility that bundles the transform \u2014 never typed caps, never a bare `uppercase`",
+            "no text style carries a transform and the library has no `type-*` utility \u2014 caps are typed into the string exactly where Figma types them; never add `uppercase`"
+          ]
+        }
+      }
+    },
+    "sizing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional sizing doctrine where a library's design system defines one. Library prose belongs here, never in a template.",
+      "properties": {
+        "heightRule": {
+          "type": "string",
+          "description": "How the synthesis stage maps a Figma control's frame height to CSS ({{HEIGHT_RULE}}). Default: pin the authored frame height; never derive from padding + line-height. A library with height tokens states the token mapping here.",
+          "examples": [
+            "a CONTROL frame at 32/40/48/56 maps to the Height token (height: var(--height-sm|md|lg|xl), zero y-padding) \u2014 never a raw step; hug-content controls take no height token (tap-target overlay instead)"
           ]
         }
       }
     },
     "audience": {
       "type": "string",
-      "description": "Sentence for val-context §1 describing which audiences/registers this library serves and how that selects component families.",
+      "description": "Sentence for val-context \u00a71 describing which audiences/registers this library serves and how that selects component families.",
       "examples": [
-        "applicant-facing (the Short App application flow — fields, cards, actions) or portal/reviewer-facing (the Portal Specific set: StatusTracker, Action, UtilityButton). This selects which component families apply.",
+        "applicant-facing (the Short App application flow \u2014 fields, cards, actions) or portal/reviewer-facing (the Portal Specific set: StatusTracker, Action, UtilityButton). This selects which component families apply.",
         "reviewer-facing or applicant-facing (this selects the design language register)."
       ]
     },
@@ -242,7 +263,7 @@
         "design": {
           "type": "boolean",
           "default": false,
-          "description": "Brief → concept → human gate → Svelte handoff: /design + design-* agents. Requires design.surfaces."
+          "description": "Brief \u2192 concept \u2192 human gate \u2192 Svelte handoff: /design + design-* agents. Requires design.surfaces."
         }
       }
     },
@@ -258,7 +279,7 @@
         },
         "surfaces": {
           "type": "object",
-          "description": "Map of surface id → surface. The /design command takes --surface <id>; with one entry it is the default.",
+          "description": "Map of surface id \u2192 surface. The /design command takes --surface <id>; with one entry it is the default.",
           "additionalProperties": {
             "type": "object",
             "required": [
@@ -275,7 +296,7 @@
               },
               "methodology": {
                 "type": "string",
-                "description": "Methodology file name inside methodologyDir. Its §10 'shipped but unused' line and §12 interim-class column are read by class-audit; its companion *-decisions.md is history and is never read.",
+                "description": "Methodology file name inside methodologyDir. Its \u00a710 'shipped but unused' line and \u00a712 interim-class column are read by class-audit; its companion *-decisions.md is history and is never read.",
                 "examples": [
                   "short-app.md"
                 ]
@@ -296,7 +317,7 @@
               },
               "viewports": {
                 "type": "array",
-                "description": "Viewports a concept must draw — one <main data-concept data-viewport=id> each.",
+                "description": "Viewports a concept must draw \u2014 one <main data-concept data-viewport=id> each.",
                 "items": {
                   "type": "object",
                   "required": [

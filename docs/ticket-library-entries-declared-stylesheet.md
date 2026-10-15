@@ -1,5 +1,7 @@
 # Ticket: `paths.componentCss` cannot express which entry a run wants — add `library.entries`
 
+> 2026-10-15: selector/utility counts here are shortapp-ui 1.3.0-era (1.4.1: 173 component classes / 297 `va:` utilities). Entry shapes unchanged.
+
 **Status:** open · **Raised:** 2026-09-17 · **Repo:** `@valiify/val-core` (this repo)
 **Affected version:** 0.6.1 · **Order:** 0 of 3 — **prerequisite for the convergence work**
 **Severity:** medium on its own; blocking for two other tickets

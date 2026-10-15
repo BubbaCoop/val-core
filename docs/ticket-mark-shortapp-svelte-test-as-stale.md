@@ -23,7 +23,7 @@ that keeps page CSS out. **It is the only app on disk with the correct load path
 
 Its `package.json` pins:
 
-- `@valiify/shortapp-ui: ^0.1.2` — against a shipped **1.3.0**
+- `@valiify/shortapp-ui: ^0.1.2` — against a shipped **1.3.0** (1.4.1 as of 2026-10-15)
 - `@valiify/val-core: ^0.2.0` — against **0.6.1**
 
 `^0.1.2` does not admit 1.x, so the installed library is pre-1.0. That range spans the entire
@@ -45,7 +45,7 @@ exists to test cascade specificity. Neither is a render target.
 **Add a README line to the app** saying what it pins and what that predates. Something with the
 three facts in it:
 
-> Pins `@valiify/shortapp-ui@^0.1.2` against a shipped 1.3.0 — a range that predates the `va-`
+> Pins `@valiify/shortapp-ui@^0.1.2` against a shipped 1.3.0 (1.4.1 as of 2026-10-15) — a range that predates the `va-`
 > class rename, so its components use the unprefixed vocabulary. Nothing measured here is
 > current. This is not a render target; see val-core's Gate 5.5 render shell.
 

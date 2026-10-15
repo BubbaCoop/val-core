@@ -81,6 +81,7 @@ worked example: [val.config.example.json](val.config.example.json).
 | `paths.designSystemSkill` | the library-specific skill the build and synthesis agents read (**required**; stays in the library repo) |
 | `paths.*` (registry, tokens, css, sprite, stories, runs, tools, …) | every repo path the agents reference; defaults match the Valiify layout |
 | `typography.fonts` / `systemNote` / `dataRule` / `casingRule` | the one place the libraries' design systems change agent behaviour (Inter-only vs Inter + JetBrains Mono; `type-*` casing utilities vs typed caps) |
+| `sizing.heightRule` | how a Figma control's frame height maps to CSS — a library with height tokens states the token mapping here (e.g. the Short App's 32/40/48/56 → `var(--height-*)`); the default pins the authored frame height |
 | `audience` | the register sentence in requirements §1 |
 | `pipelines.val` / `pipelines.extract` | generate one pipeline or both |
 
@@ -104,8 +105,8 @@ does not know. Current set: `LIBRARY_NAME`, `LIBRARY_DISPLAY_NAME`,
 `COMPONENTS_DIR`, `RUN_OUTPUT_DIR`, `TOOLS_DIR`, `FIGMA_TOKENS_JSON`,
 `BUILD_THEME_SCRIPT`, `VISUAL_SPECS_SCRIPT`, `COMPONENT_PROCESS_DOC`,
 `CLAUDE_MD_SECTIONS`, `CORE_SKILLS_DIR`, `FONT_PACKAGES`,
-`TYPE_SYSTEM_NOTE`, `DATA_TYPOGRAPHY_RULE`, `AUDIENCE_NOTE`,
-`QA_PROBES_PATH`, `GENERATED_HEADER`.
+`TYPE_SYSTEM_NOTE`, `DATA_TYPOGRAPHY_RULE`, `CASING_RULE`, `HEIGHT_RULE`,
+`AUDIENCE_NOTE`, `QA_PROBES_PATH`, `GENERATED_HEADER`.
 
 **Rule for template authors:** a line is either generic methodology or a
 substituted config value. Library-specific prose (a font constraint, a
