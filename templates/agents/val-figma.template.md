@@ -5,7 +5,7 @@ description: >
   extracted. Requires a run directory under {{RUN_OUTPUT_DIR}}/ whose manifest.json
   lists input.frames (or a screenshot in 00-input/). Produces
   01-extraction/ — one extraction per frame/state.
-tools: Read, Write, Bash, Glob, mcp__claude_ai_Figma__get_design_context, mcp__claude_ai_Figma__get_screenshot, mcp__claude_ai_Figma__get_metadata
+tools: Read, Write, Bash, Glob, mcp__claude_ai_Figma__get_design_context, mcp__claude_ai_Figma__get_screenshot, mcp__claude_ai_Figma__get_metadata, mcp__claude_ai_Figma__use_figma
 ---
 {{GENERATED_HEADER}}
 
@@ -73,12 +73,69 @@ frames/<state>/):
    else (no fills, no text styles). The build agent's geometry check
    asserts against this table; figma.json stays the full-detail lookup
    that no later stage reads end to end.
+8. structure-snapshot.json + fingerprint.json — the frame's structural
+   fingerprint, stored so a later re-run can tell whether the frame changed.
+   Read {{TOOLS_DIR}}/figma/structure-snapshot.js, replace __FRAME_ID__ with
+   the frame's node id, and pass the text to use_figma VERBATIM (one call per
+   frame); write its return value to structure-snapshot.json. Then
+   node {{TOOLS_DIR}}/frame-fingerprint.mjs structure-snapshot.json --out fingerprint.json
+   **use_figma is in your tool list for this script and nothing else.** It
+   can write to the designer's file: never author, edit or extend Figma
+   code, and never use it to fix, inspect or "check" anything beyond this
+   snapshot. If the script errors, record the error in structure.md and
+   continue — a frame without a fingerprint is simply never reusable.
+   The snapshot is also the authoritative record of what each node binds
+   (variable ids for fills, strokes, effects, height, spacing, padding):
+   get_design_context omits some bindings (it emitted no var() for a
+   Plain Text Field box that binds Height/LG), so where variables.json and
+   the snapshot disagree about a binding, the snapshot wins — say so.
 
 If the input is a screenshot (no Figma URL): write figma.json with
 geometry estimated from the image, set "source": "screenshot" in the
 manifest, skip variables.json and behaviors.json (write them as empty
 with a "source-limited" note), and copy the screenshot to
 exports/page@2x.png recording its true scale.
+
+Reuse check (re-runs only — when manifest.rerunOf names a prior run and the
+orchestrator asks for it). A re-run against a newer library usually points at
+frames nobody touched, and a full extraction of an unchanged frame is the most
+expensive stage of the pipeline for no new information. For each frame, BEFORE
+extracting it:
+0. If the prior frame has no fingerprint.json (runs before val-core 0.11.0),
+   skip the check: extract in full. Pixels alone cannot prove a frame
+   unchanged.
+1. One get_metadata, one export of the frame (same scale as the prior run's
+   export) and the item-8 structure snapshot. Write them to
+   01-extraction/[frames/<state>/]reuse-check/: page.png, a layout.json
+   built from the metadata alone (regions as in item 7),
+   structure-snapshot.json and its fingerprint.json.
+2. node {{TOOLS_DIR}}/frame-diff.mjs \
+     --prior <prior run>/01-extraction/[frames/<state>/]exports/page@2x.png \
+     --current 01-extraction/[frames/<state>/]reuse-check/page.png \
+     --prior-fingerprint <prior run>/01-extraction/[frames/<state>/]fingerprint.json \
+     --current-fingerprint 01-extraction/[frames/<state>/]reuse-check/fingerprint.json \
+     --prior-layout <prior run>/01-extraction/[frames/<state>/]layout.json \
+     --current-layout 01-extraction/[frames/<state>/]reuse-check/layout.json \
+     --out 01-extraction/[frames/<state>/]reuse-check/frame-diff.json
+   It checks PIXELS and STRUCTURE (node tree, main components, variant
+   props, variable bindings, style ids, auto-layout) separately and says
+   which changed.
+3. UNCHANGED (both match) → copy the prior frame's extraction files
+   (figma.json, variables.json, behaviors.json, structure.md, layout.json,
+   structure-snapshot.json, fingerprint.json, exports/) into this run
+   unmodified, prepend one line to structure.md naming the prior run and the
+   frame-diff verdict, and set manifest input.frames[].reusedFrom to the
+   prior run's path. Do not re-read the copied files.
+   CHANGED → extract the frame in full, exactly as above, and keep the fresh
+   snapshot/fingerprint. The report names what changed (pixel clusters with
+   their regions; structural fields per node with before/after); list it in
+   structure.md under "Changed since <prior run>". Never patch a prior
+   figma.json — a paint-only change (an ink override removed, a style's
+   casing changed) and a binding-only change (a fill rebound to another
+   variable with the same value) are CHANGED on purpose, because the stale
+   record would flow into every later stage.
+The frame-diff tolerance (8) absorbs MCP render noise (Δ1 colour rounding
+across the frame, ≤Δ5 around raster assets); do not raise it to force a reuse.
 
 Definition of done (state each explicitly at the end of your report):
 - Every component instance has a componentKey recorded (or the screenshot
@@ -88,6 +145,8 @@ Definition of done (state each explicitly at the end of your report):
   recorded in the manifest (exportScaleAchieved).
 - Every disclosure-bearing instance has its component-set state variants
   captured, or an explicit note that the set defines none.
+- Every frame has structure-snapshot.json + fingerprint.json (item 8), or
+  structure.md records why the snapshot failed.
 - Every frame in input.frames has its extraction (root or
   frames/<state>/), and each has a layout.json listing every region in
   its structure.md.

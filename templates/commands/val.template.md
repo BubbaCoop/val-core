@@ -41,6 +41,34 @@ route. You are the only participant who sees every handoff; act like it.
    node {{TOOLS_DIR}}/generate-registry.mjs first (hand-added figmaNodeIds,
    figmaNames, behaviors and tokens survive regeneration).
 
+## Re-running a prior run (same frames, newer library or val-core)
+When the requester asks to re-run an earlier run so the results compare:
+1. Copy the prior run's 00-input/ verbatim and set manifest "rerunOf" to
+   its path. Then read the prior manifest's gate notes for requester
+   decisions given IN CHAT that never reached its 00-input/ (rework
+   instructions, "must be sticky", padding changes) and write them,
+   quoted verbatim with their gate and timestamp, to
+   00-input/carried-decisions-<date>.md. A prior re-run missed one: the
+   requester's sticky-footer decision lived only in a gate note, and the
+   new requirements stage defaulted it away.
+2. Gate 1 runs in REUSE CHECK mode (val-figma's reuse-check section): a
+   fresh export, metadata and structure snapshot per frame, and
+   frame-diff.mjs against the prior extraction's export and
+   fingerprint.json. A frame is UNCHANGED only when PIXELS and STRUCTURE
+   both match; UNCHANGED frames copy the prior extraction, CHANGED frames
+   are extracted in full. Record each frame's verdict and which check
+   changed in the Gate 1 note. Expect little saving when the designer has
+   touched the frames — paint-only and binding-only edits are CHANGED by
+   design — and none against a prior run older than val-core 0.11.0,
+   which stored no fingerprint.
+3. The prior run's requester PNGs (frames[].reference) are only valid
+   where frame-diff found no cluster. If it found any on a web frame,
+   tell the requester which regions are stale and ask for fresh exports
+   before Gate 6; otherwise record the stale regions as an
+   orchestrator-accepted entry with the frame-diff evidence.
+4. Gates 2–6 always run fresh. The library changed; that is what the
+   re-run measures.
+
 ## Pipeline
 Invoke, in order (2 and 3 may run after 1 in either order):
   Gate 1: val-figma        → verify 01-extraction/ complete per its DoD
