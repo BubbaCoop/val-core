@@ -11,6 +11,54 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-16
+
+### Added
+
+- **`models` config key** — an optional per-agent model override that val-init
+  writes into each generated agent's `model:` frontmatter (inserted or
+  replaced). Moves mechanical stages to a cheaper model without forking a
+  template: the Short App's BSA re-run spent ~370k tokens on val-context and
+  val-qa, both on the session's Opus. Unknown agent names fail (a typo must
+  not be a silent no-op); the `design-*` agents cannot be overridden, because
+  their `model: inherit` keeps every /design gate on the dispatching
+  session's model. Template defaults are unchanged.
+- **Structural frame fingerprint** — `tools/figma/structure-snapshot.js` (a
+  READ-ONLY Plugin API script val-figma passes verbatim to `use_figma`),
+  `tools/lib/fingerprint.mjs` and `tools/frame-fingerprint.mjs`. Hashes the
+  node tree, instance main components and variant properties, every variable
+  binding (node, paint, effect), style ids and auto-layout props; layer names
+  and absolute geometry are excluded. val-figma now stores
+  `structure-snapshot.json` + `fingerprint.json` with every extraction. The
+  snapshot also records bindings `get_design_context` omits: on the Short
+  App's Plain Text Field it showed the input box binding `Height/LG`, which a
+  design-context extraction had reported as a raw 48.
+- **`tools/frame-diff.mjs`** — the re-run reuse check. Compares a frame's
+  prior and fresh MCP exports and fingerprints, reporting PIXELS and
+  STRUCTURE separately; UNCHANGED only when both match. Fingerprints are
+  required: a same-colour variable rebind (Neutral/Base → Text/Tertiary, both
+  #6F7276 in the Short App file) renders identically and is CHANGED by
+  structure. Optional layout tables name the region of each pixel cluster
+  and catch moved nodes. The default pixel tolerance (8) is calibrated on two
+  real exports of one unchanged frame a month apart: Δ1 colour rounding on
+  most pixels, ≤Δ5 around raster assets, every real edit above 8.
+- **/val: "Re-running a prior run" section** and a **reuse-check mode in
+  val-figma**. Gate 1 copies the prior extraction for frames frame-diff calls
+  UNCHANGED and extracts the rest in full; Gate 0 carries requester decisions
+  that lived only in the prior manifest's gate notes into
+  `00-input/carried-decisions-<date>.md`; stale requester PNGs are flagged
+  from the frame-diff clusters before Gate 6.
+
+### Changed
+
+- `tools/lib/png.mjs`: `changedClusters` takes an optional per-channel
+  `tolerance` (default 0, byte-exact — regression-check is unchanged).
+- **val-figma's tool list gains `use_figma`**, scoped in the template to the
+  shipped structure-snapshot script and nothing else. The tool can write to
+  the designer's file; the agent is told never to author or extend Figma
+  code with it. A frame whose snapshot fails is extracted normally and is
+  simply never reusable.
+
 ## [0.10.0] — 2026-10-15
 
 ### Added
