@@ -171,10 +171,12 @@ export function regionMismatch(a, b, box) {
 }
 
 /**
- * Byte-exact diff of two same-size images, clustered into connected regions
- * of `cell`-px cells. Returns clusters sorted by changed-pixel count.
+ * Diff of two same-size images, clustered into connected regions of `cell`-px
+ * cells. Returns clusters sorted by changed-pixel count. A pixel counts as
+ * changed when any RGB channel differs by more than `tolerance` (default 0 =
+ * byte-exact, which regression-check relies on).
  */
-export function changedClusters(a, b, cell = 16) {
+export function changedClusters(a, b, cell = 16, tolerance = 0) {
   if (a.width !== b.width || a.height !== b.height) {
     throw new Error(`changedClusters needs equal dimensions (${a.width}x${a.height} vs ${b.width}x${b.height})`);
   }
@@ -186,9 +188,9 @@ export function changedClusters(a, b, cell = 16) {
     for (let x = 0; x < a.width; x++) {
       const i = (y * a.width + x) * 4;
       if (
-        a.data[i] !== b.data[i] ||
-        a.data[i + 1] !== b.data[i + 1] ||
-        a.data[i + 2] !== b.data[i + 2]
+        Math.abs(a.data[i] - b.data[i]) > tolerance ||
+        Math.abs(a.data[i + 1] - b.data[i + 1]) > tolerance ||
+        Math.abs(a.data[i + 2] - b.data[i + 2]) > tolerance
       ) {
         total++;
         const key = Math.floor(y / cell) * cols + Math.floor(x / cell);

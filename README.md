@@ -143,6 +143,23 @@ the manifest's `input.frames[]` (its files live under `…/frames/<state>/`).
   changed cluster must lie inside a fix region (or a listed sibling) and no
   fix or sibling region may get worse against the reference — strict by
   design. Zero model tokens; run before dispatching QA.
+- `frame-diff.mjs --prior png --current png --prior-fingerprint json --current-fingerprint json [--prior-layout json --current-layout json] [--tolerance n] [--out json]`
+  — the re-run reuse check: has a Figma frame changed since a prior run
+  extracted it? Two checks, reported separately: PIXELS (nothing beyond the
+  render-noise tolerance, no shared layout node moved, none missing) and
+  STRUCTURE (the fingerprints match). UNCHANGED only when both match, which
+  lets Gate 1 copy the prior extraction; CHANGED says which check failed,
+  with pixel clusters named by region and structural changes listed per node
+  and field. A same-colour variable rebind is invisible to pixels and CHANGED
+  by structure. Zero model tokens.
+- `frame-fingerprint.mjs <structure-snapshot.json> [--out fingerprint.json]`
+  — canonical SHA-256 fingerprint of a frame's structure: node tree, instance
+  main components and variant properties, every variable binding (node,
+  paint, effect), style ids, auto-layout container and child props. Layer
+  names and absolute geometry are excluded. The snapshot comes from
+  `figma/structure-snapshot.js`, a READ-ONLY Plugin API script that
+  val-figma passes verbatim to `use_figma`; it also records bindings
+  `get_design_context` omits (a field box's `Height/LG`).
 - `sprite-subset.mjs <sprite.svg> --used-by index.html [--out file]`
   — emits only the `<symbol>`s a page references (5 instead of 2,000).
 - `qa/harness.mjs` + `qa/standing.mjs` (import, not run) — the Playwright
