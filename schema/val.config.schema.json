@@ -245,6 +245,15 @@
         "reviewer-facing or applicant-facing (this selects the design language register)."
       ]
     },
+    "models": {
+      "type": "object",
+      "description": "Optional per-agent model override, keyed by generated agent name (val-figma, val-context, val-qa, extract-tokens, …). val-init writes the value into that agent's `model:` frontmatter; agents not listed keep the template's choice. The design-* agents cannot be overridden — they pin `inherit` so every gate of a /design run runs on the dispatching session's model. Use to move mechanical stages to a cheaper model; keep judgement stages (build, accuracy adjudication) on the strongest.",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(inherit|opus|sonnet|haiku|claude-[a-z0-9.-]+)$"
+      },
+      "examples": [{ "val-context": "sonnet", "val-qa": "sonnet" }]
+    },
     "pipelines": {
       "type": "object",
       "additionalProperties": false,

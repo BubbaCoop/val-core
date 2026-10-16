@@ -243,6 +243,32 @@ const jobs = [
 
 const results = { created: [], updated: [], unchanged: [], skipped: [] };
 
+const models = config.models ?? {};
+{
+  const agentNames = readdirSync(jobs[0].src)
+    .filter((f) => f.endsWith(".template.md"))
+    .map((f) => f.replace(/\.template\.md$/, ""));
+  for (const name of Object.keys(models)) {
+    if (!agentNames.includes(name)) {
+      fail(`invalid ${configRel}: models.${name} names no agent. Agents: ${agentNames.join(", ")}`);
+    }
+    if (name.startsWith("design-")) {
+      fail(
+        `invalid ${configRel}: models.${name} — the design-* agents pin model: inherit so every gate of a ` +
+          `/design run matches the session that dispatched it; they cannot be overridden.`,
+      );
+    }
+  }
+}
+
+/** Set (or add) `model:` in a generated agent's frontmatter. */
+function withModel(text, model, file) {
+  const m = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!m) fail(`${file}: no frontmatter to carry models override`);
+  const fm = /^model:.*$/m.test(m[1]) ? m[1].replace(/^model:.*$/m, `model: ${model}`) : `${m[1]}\nmodel: ${model}`;
+  return text.replace(m[0], `---\n${fm}\n---`);
+}
+
 for (const { src, dest } of jobs) {
   for (const file of readdirSync(src).filter((f) => f.endsWith(".template.md")).sort()) {
     const outName = file.replace(/\.template\.md$/, ".md");
@@ -256,7 +282,9 @@ for (const { src, dest } of jobs) {
       results.skipped.push(outName);
       continue;
     }
-    const generated = substitute(readFileSync(join(src, file), "utf8"), file);
+    let generated = substitute(readFileSync(join(src, file), "utf8"), file);
+    const agentName = outName.replace(/\.md$/, "");
+    if (src === jobs[0].src && models[agentName]) generated = withModel(generated, models[agentName], file);
     const outPath = join(dest, outName);
     const rel = relative(repoRoot, outPath);
 

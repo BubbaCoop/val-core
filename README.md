@@ -83,6 +83,7 @@ worked example: [val.config.example.json](val.config.example.json).
 | `typography.fonts` / `systemNote` / `dataRule` / `casingRule` | the one place the libraries' design systems change agent behaviour (Inter-only vs Inter + JetBrains Mono; `type-*` casing utilities vs typed caps) |
 | `sizing.heightRule` | how a Figma control's frame height maps to CSS — a library with height tokens states the token mapping here (e.g. the Short App's 32/40/48/56 → `var(--height-*)`); the default pins the authored frame height |
 | `audience` | the register sentence in requirements §1 |
+| `models` | optional per-agent model override written into the generated frontmatter, e.g. `{ "val-context": "sonnet", "val-qa": "sonnet" }` to move mechanical stages off the most expensive model; unknown agent names fail, and the `design-*` agents (which pin `inherit`) cannot be overridden |
 | `pipelines.val` / `pipelines.extract` | generate one pipeline or both |
 
 Two libraries, two configs, identical methodology:
