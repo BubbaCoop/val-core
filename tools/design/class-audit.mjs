@@ -31,7 +31,15 @@
  * Usage:
  *   node <tools-dir>/design/class-audit.mjs <dir-or-file> --library <root> --methodology <md>
  *        [--claude-md <path>] [--tailwind-from <consumer-root>] [--package <npm-name>]
- *        [--class-prefix <id>] [--class-strict] [--out <json>] [--no-tailwind]
+ *        [--class-prefix <id>] [--class-strict] [--app-layout <path>] [--out <json>] [--no-tailwind]
+ *
+ * --app-layout <path> declares the ONE app-owned layout stylesheet a package may carry,
+ * relative to the audited directory. That file is audited instead of rejected: layout
+ * properties freely, any other property only from library tokens, selectors anchored on
+ * app classes and never on a library class, @media width breakpoints only — and it must
+ * load AFTER the library bundle wherever it is loaded. Every other stylesheet, <style>,
+ * style= and style: is still a violation. Inert when the target is a single file (a
+ * concept carries no CSS). Rules and rationale: ../lib/app-layout.mjs.
  *
  * Surface rules come from the methodology and the theme themselves — nothing is
  * duplicated elsewhere:
@@ -55,12 +63,13 @@ import { pathToFileURL } from "node:url";
 import { parseArgs, fail, printCapped } from "../lib/args.mjs";
 import { resolveReport } from "../lib/report.mjs";
 import { stylesheetPath } from "../lib/stylesheet-path.mjs";
+import { auditAppLayoutCss, checkLoadOrder, libraryBundleMatcher } from "../lib/app-layout.mjs";
 
 const { positional, opts } = parseArgs(process.argv.slice(2), { booleans: ["no-tailwind", "no-write", "class-strict"] });
 const target = positional[0];
 if (!target || !opts.library || !opts.methodology) {
   fail(
-    "Usage: node <tools-dir>/design/class-audit.mjs <dir-or-file> --library <root> --methodology <md> [--claude-md <path>] [--tailwind-from <root>] [--package <name>] [--out <json>] [--no-tailwind]",
+    "Usage: node <tools-dir>/design/class-audit.mjs <dir-or-file> --library <root> --methodology <md> [--claude-md <path>] [--tailwind-from <root>] [--package <name>] [--class-prefix <id>] [--class-strict] [--app-layout <path>] [--out <json>] [--no-tailwind]",
   );
 }
 const targetPath = resolve(target);
@@ -87,6 +96,14 @@ function nsForms(base) {
   if (!CLASS_NS) return [base];
   return base.startsWith(CLASS_NS) ? [base, base.slice(CLASS_NS.length)] : [base, CLASS_NS + base];
 }
+// ---- the one declared app layout stylesheet (opt-in) --------------------------------------
+// Resolved against the audited DIRECTORY. A single-file target (a concept) carries no CSS, so
+// the declaration is inert there — the same flags reach the concept audits through the shared
+// command line, and must not make them fail.
+const APP_LAYOUT_DECLARED = typeof opts["app-layout"] === "string" ? opts["app-layout"] : null;
+if (opts["app-layout"] === true) fail("--app-layout needs a path, relative to the audited directory");
+const APP_LAYOUT = APP_LAYOUT_DECLARED && statSync(targetPath).isDirectory() ? resolve(targetPath, APP_LAYOUT_DECLARED) : null;
+
 const hasNs = (set, base) => nsForms(base).some((b) => set.has(b));
 const getNs = (map, base) => {
   for (const b of nsForms(base)) if (map.has(b)) return map.get(b);
@@ -254,6 +271,15 @@ function citedClasses(mdPath) {
   };
   for (const m of md.matchAll(/`([^`\n]+)`/g)) for (const tok of m[1].split(/\s+/)) add(tok);
   for (const m of md.matchAll(/class="([^"]+)"/g)) for (const tok of m[1].split(/\s+/)) add(tok);
+  return out;
+}
+
+/** Every custom property the theme defines, without the leading `--` — the tokens app CSS may cite. */
+function allThemeTokens() {
+  const out = new Set();
+  for (const file of cssFiles(join(libRoot, "src", "themes"))) {
+    for (const m of stripComments(readFileSync(file, "utf8")).matchAll(/--([A-Za-z0-9_-]+)\s*:/g)) out.add(m[1]);
+  }
   return out;
 }
 
@@ -441,6 +467,9 @@ function classifyInner(cls) {
  * looked wrong.
  */
 function classify(cls) {
+  // Before the library rules: an app class is not the library's, so neither its vocabulary
+  // nor its prefix applies. The stylesheet audit already refused any library class in a selector.
+  if (APP_CLASSES.has(cls)) return { kind: "app-layout", reason: `defined by the declared app layout stylesheet ${APP_LAYOUT_DECLARED}` };
   const r = classifyInner(cls);
   if (!CLASS_PREFIX || !CLASS_STRICT) return r;
   const { base, prefixed } = splitVariants(cls);
@@ -474,6 +503,10 @@ const isConcept = (f) => /concept.*\.html$/.test(basename(f));
 const occurrences = []; // { cls, file, line }
 const groups = []; // { classes: [base…], file, line } — one per class attribute / data-class
 const issues = []; // { file, line, kind: "violation", reason, detail }
+let appLayoutFound = null; // { file, rel, text } when the declared stylesheet is present
+// Classes the declared stylesheet defines. Markup that hooks them is sanctioned — they exist
+// because the one audited app stylesheet defines them, not because anyone invented them.
+const APP_CLASSES = new Set();
 
 function lineOf(text, index) {
   return text.slice(0, index).split("\n").length;
@@ -492,7 +525,19 @@ for (const file of files) {
 
   if (ext === ".css") {
     if (basename(file) === "concept.css") continue;
-    issues.push({ file: rel, line: 1, kind: "violation", reason: "stylesheet in the package — pages carry no CSS", detail: basename(file) });
+    if (APP_LAYOUT && resolve(file) === APP_LAYOUT) {
+      appLayoutFound = { file, rel, text };
+      continue;
+    }
+    issues.push({
+      file: rel,
+      line: 1,
+      kind: "violation",
+      reason: APP_LAYOUT
+        ? `stylesheet in the package — the only app CSS allowed is the declared ${APP_LAYOUT_DECLARED}`
+        : "stylesheet in the package — pages carry no CSS",
+      detail: basename(file),
+    });
     continue;
   }
 
@@ -540,6 +585,38 @@ for (const file of files) {
     for (const lit of literalsInExpression(m[1])) addClassList(lit, m.index);
   }
   for (const m of text.matchAll(/\sclass:([a-z][a-z0-9-]*)/g)) addClassList(m[1], m.index);
+}
+
+// ---- the declared app layout stylesheet ---------------------------------------------------
+
+const appLayout = { declared: APP_LAYOUT_DECLARED, active: Boolean(APP_LAYOUT), present: false, rules: 0, declarations: 0, loadedFrom: 0 };
+if (APP_LAYOUT && appLayoutFound) {
+  appLayout.present = true;
+  const isLibraryClass = (name) => {
+    if (CLASS_PREFIX && (name.startsWith(CLASS_NS) || name.startsWith(`${CLASS_PREFIX}:`))) return true;
+    const bare = CLASS_PREFIX && name.startsWith(`${CLASS_PREFIX}:`) ? name.slice(CLASS_PREFIX.length + 1) : name;
+    return hasNs(COMPONENT, bare) || UTILITY.has(bare);
+  };
+  const content = auditAppLayoutCss(appLayoutFound.text, { isLibraryClass, tokens: allThemeTokens() });
+  appLayout.rules = content.rules;
+  appLayout.declarations = content.declarations;
+  for (const c of content.appClasses) APP_CLASSES.add(c);
+  appLayout.appClasses = [...content.appClasses].sort();
+  for (const i of content.issues) issues.push({ file: appLayoutFound.rel, line: i.line, kind: "violation", reason: i.reason, detail: i.detail });
+
+  // Load order is read from every place a load could be written: markup links, script and
+  // Svelte imports, CSS @imports, and HANDOFF.md's load path (fenced blocks only).
+  const ORDER_EXT = new Set([".svelte", ".html", ".css", ".js", ".ts", ".mjs", ".md"]);
+  const orderFiles = walk(targetPath)
+    .filter((f) => ORDER_EXT.has(extname(f)) && resolve(f) !== APP_LAYOUT)
+    .map((f) => ({ path: f, rel: relative(process.cwd(), f), text: readFileSync(f, "utf8"), ext: extname(f) }));
+  const order = checkLoadOrder(orderFiles, {
+    isLibraryBundle: libraryBundleMatcher({ packageName: opts.package ?? null, libRoot }),
+    appBase: basename(APP_LAYOUT),
+    appRel: appLayoutFound.rel,
+  });
+  appLayout.loadedFrom = order.loadedFrom;
+  for (const i of order.issues) issues.push({ kind: "violation", ...i });
 }
 
 // ---- classify + report ------------------------------------------------------------------
@@ -623,6 +700,7 @@ const report = {
     classPrefix: CLASS_PREFIX,
     classNamespace: CLASS_NS,
     classSpelling: CLASS_PREFIX ? (CLASS_STRICT ? "strict" : "tolerant") : "none",
+    appLayout,
     ...(PLANNED_DIAGNOSTIC ? { plannedDiagnostic: PLANNED_DIAGNOSTIC } : {}),
   },
   files: files.map((f) => relative(process.cwd(), f)),
@@ -670,6 +748,13 @@ if (tailwind.checked) {
   lines.push(`  tailwind ${tailwind.tailwind}: ${tailwind.candidates} sanctioned utilities compiled; ${tailwind.nonCompiling.length} did not${tailwind.nonCompiling.length ? ` → ${tailwind.nonCompiling.join(" ")} (methodology/library defect — report it)` : ""}`);
 } else if (tailwind.requested) {
   lines.push(`  tailwind check skipped: ${tailwind.reason} (deliberate)`);
+}
+if (appLayout.active) {
+  lines.push(
+    appLayout.present
+      ? `  app layout  ${appLayout.declared}: ${appLayout.rules} rule(s), ${appLayout.declarations} declaration(s), loaded from ${appLayout.loadedFrom} place(s)`
+      : `  app layout  ${appLayout.declared} declared, not present — nothing to audit`,
+  );
 }
 lines.push(outPath ? `  report: ${relative(process.cwd(), outPath)}` : `  report not written: ${dest.reason}`);
 printCapped(lines, 40);

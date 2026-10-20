@@ -425,6 +425,11 @@
               "type": "string",
               "default": "src/lib/components",
               "description": "Where composed components land inside the package."
+            },
+            "appLayoutStylesheet": {
+              "type": "string",
+              "pattern": "^[^/].*\\.css$",
+              "description": "Optional. The ONE app-owned layout stylesheet a design package may carry, relative to the package root (e.g. src/lib/app-layout.css). Unset (the default), class-audit rejects all page CSS, as before. Set, that file alone is audited instead of rejected: layout properties (display, visibility, position, flex/grid flow and track sizing) take any value; any other property must take its value from library tokens; selectors must be anchored on app classes and never name a library class; breakpoints are @media width conditions only; and the file must load AFTER the library bundle wherever it is loaded, HANDOFF.md's load path included. For libraries that ship components and a closed utility surface but leave page layout to the app."
             }
           }
         }

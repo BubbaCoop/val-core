@@ -11,6 +11,57 @@ README "Releasing".
 
 ## [Unreleased]
 
+### Added
+
+- **`design.output.appLayoutStylesheet` — one declared app layout stylesheet.**
+  class-audit rejects all page CSS, and for most libraries that stays right: the
+  failure the design pipeline exists to prevent is invented style. But a library
+  that ships components and a CLOSED utility surface, and leaves page layout to
+  the app, hits layout needs no shipped class can meet. The case that forced
+  this: the Short App's BSA step draws its web button row and its mobile sticky
+  footer as two elements in two DOM positions, and switching between them needs
+  display utilities at a breakpoint that the closed surface does not ship. The
+  methodology could only block the page or let the app write a media query — and
+  class-audit failed the media query, along with the footer's methodology-mandated
+  inset-shadow hairline.
+
+  Opting in declares exactly ONE stylesheet, relative to the package root. val-init
+  renders it into every class-audit command as `--app-layout <path>` and into the
+  page builder's CSS rule. That file is audited instead of rejected:
+
+  - layout properties (display, visibility, position and offsets, flex/grid flow
+    and alignment, grid track sizing) take any value;
+  - any other property must take its value from library tokens — at least one
+    `var(--token)` the theme defines, plus lengths and structural keywords; a raw
+    colour fails even beside a valid token, and so does one in a `var()` fallback;
+  - every selector must be anchored on an app class or id and must name no library
+    class, under either spelling (`.va-btn`, escaped `.va\:flex`);
+  - breakpoints are `@media` width conditions only (`min-width`, `max-width`, the
+    `width >=` range form); `@import`, `@layer`, `@font-face`, custom properties
+    and `!important` fail, each with the reason;
+  - **the file must load after the library bundle** wherever it is loaded — Svelte
+    and script imports, `<link>`, CSS `@import`, and HANDOFF.md's load path
+    (fenced blocks only; prose is not a load path). The bundle is unlayered, so an
+    app rule that ties a library utility on specificity loses if it loads first,
+    and the hide rule silently does nothing. A file that loads the stylesheet
+    without the bundle cannot have its order proven and fails; so does a declared,
+    present stylesheet that nothing loads.
+
+  The classes the stylesheet defines are sanctioned in markup (new kind
+  `app-layout`), exempt from the library's prefix rule because they are not the
+  library's. Every other stylesheet, `<style>`, `style=` and `style:` is still a
+  violation. The flag is inert on a single-file target, so the concept audits —
+  which receive the same flags — are unaffected.
+
+  **Default unchanged.** With the key unset, every rendered agent is identical to
+  0.11.0's apart from the version header (verified across all 19 generated files),
+  and every stylesheet is still rejected.
+
+  Rules and rationale live in `tools/lib/app-layout.mjs`; 12 fixture tests in
+  `tools/design/class-audit.test.mjs`. Deliberately NOT layout, and so token-only
+  or rejected: gap, margin, padding, width and height (spacing and box size come
+  from shipped utilities), and `z-index` (the library carries a scale).
+
 ## [0.11.0] — 2026-10-16
 
 ### Added

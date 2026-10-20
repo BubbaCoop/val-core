@@ -526,3 +526,183 @@ test("--class-strict without --class-prefix is refused rather than silently perm
   assert.equal(r.status, 1);
   assert.match(r.stderr, /--class-strict requires --class-prefix/);
 });
+
+// ---- --app-layout: the one declared app layout stylesheet ------------------------------------
+
+const PKG = "@acme/ui";
+const LIB_FIRST = "```css\n@import \"@acme/ui/styles.css\";\n@import \"./src/lib/app-layout.css\";\n```\n";
+
+/** A package with a declared stylesheet, a page that hooks it, and a HANDOFF load path. */
+function appLayoutPkg({ css, page, handoff = LIB_FIRST } = {}) {
+  const { lib, pkg } = setup();
+  mkdirSync(join(pkg, "src", "lib"), { recursive: true });
+  writeFileSync(
+    join(pkg, "src", "lib", "app-layout.css"),
+    css ??
+      `.step-actions-web { display: none; }
+.step-actions-mobile { display: flex; box-shadow: inset 0 1px 0 var(--color-primary); }
+@media (min-width: 48rem) {
+  .step-actions-web { display: flex; }
+  .step-actions-mobile { display: none; }
+}`,
+  );
+  writeFileSync(join(pkg, "Page.svelte"), page ?? `<div class="step-actions-web flex"><button class="btn btn-primary">Go</button></div>`);
+  if (handoff !== null) writeFileSync(join(pkg, "HANDOFF.md"), `# Handoff\n\nLoad path:\n\n${handoff}`);
+  return { lib, pkg };
+}
+
+const auditApp = (pkg, lib, extra = []) => {
+  const r = run(pkg, lib, ["--package", PKG, "--app-layout", "src/lib/app-layout.css", ...extra]);
+  return { r, report: JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8")) };
+};
+const reasons = (report) => report.issues.map((i) => `${i.detail} :: ${i.reason}`);
+
+test("app layout: without --app-layout every stylesheet is still a violation — default unchanged", () => {
+  const { lib, pkg } = appLayoutPkg();
+  const r = run(pkg, lib, ["--package", PKG]);
+  const report = JSON.parse(readFileSync(join(pkg, "class-audit.json"), "utf8"));
+  assert.equal(r.status, 1);
+  assert.ok(report.issues.some((i) => /pages carry no CSS/.test(i.reason)), reasons(report).join("\n"));
+  assert.equal(report.rules.appLayout.active, false);
+});
+
+test("app layout: the declared stylesheet is audited, its classes are sanctioned, and the page passes", () => {
+  const { lib, pkg } = appLayoutPkg();
+  const { r, report } = auditApp(pkg, lib);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(report.verdict, "PASS");
+  assert.equal(kindOf(report, "step-actions-web"), "app-layout", "an app class the stylesheet defines is not 'unsanctioned'");
+  assert.deepEqual(report.rules.appLayout.appClasses, ["step-actions-mobile", "step-actions-web"]);
+  assert.equal(report.rules.appLayout.loadedFrom, 1);
+  assert.match(r.stdout, /app layout\s+src\/lib\/app-layout\.css: 4 rule\(s\), 5 declaration\(s\)/);
+});
+
+test("app layout: layout properties take any value; a visual property only takes tokens", () => {
+  const { lib, pkg } = appLayoutPkg({
+    css: `.row {
+  display: grid; grid-template-columns: 1fr 2fr; position: sticky; top: 0; justify-content: space-between;
+  box-shadow: inset 0 1px 0 var(--color-primary);
+  color: red;
+  padding: 13px;
+  background: var(--color-nope);
+  border: 1px solid #ccc;
+  outline-color: var(--color-primary, red);
+  box-shadow: 0 0 0 1px #ccc, inset 0 1px 0 var(--color-primary);
+}`,
+  });
+  const { r, report } = auditApp(pkg, lib);
+  assert.equal(r.status, 1);
+  const got = reasons(report).join("\n");
+  assert.match(got, /color: red :: visual value outside tokens/);
+  assert.match(got, /padding: 13px :: visual value outside tokens/);
+  assert.match(got, /--color-nope is not a token the library theme defines/);
+  assert.match(got, /border: 1px solid #ccc :: visual value outside tokens/, "no token at all");
+  assert.match(got, /#ccc, inset 0 1px 0 var\(--color-primary\) :: visual value outside tokens — "#ccc"/, "a raw colour beside a valid token still fails");
+  assert.match(got, /var\(--color-primary, red\) :: visual value outside tokens — "red"/, "a raw colour in a var() fallback is still a raw colour");
+  assert.doesNotMatch(got, /display|grid-template-columns|position|top:|justify-content/, "layout properties pass with any value");
+  assert.doesNotMatch(got, /^box-shadow: inset 0 1px 0 var\(--color-primary\) ::/m, "a token-valued visual property passes");
+});
+
+test("app layout: a selector may never name a library class, under either spelling", () => {
+  const { lib, pkg } = appLayoutPkg({
+    css: `.btn { display: none; }
+.wrap .btn-primary { display: none; }
+.va-btn { display: none; }
+.va\\:flex { display: none; }
+.wrap { display: flex; }`,
+  });
+  const { report } = auditApp(pkg, lib, ["--class-prefix", "va"]);
+  const got = reasons(report).join("\n");
+  assert.match(got, /^\.btn :: restyles a library class \(\.btn\)/m);
+  assert.match(got, /\.wrap \.btn-primary :: restyles a library class \(\.btn-primary\)/);
+  assert.match(got, /\.va-btn :: restyles a library class/);
+  assert.match(got, /\.va\\:flex :: restyles a library class \(\.va:flex\)/, "an escaped prefixed utility is still a library class");
+  assert.doesNotMatch(got, /^\.wrap :: /m);
+});
+
+test("app layout: a selector must be anchored on an app class or id", () => {
+  const { lib, pkg } = appLayoutPkg({
+    css: `button { display: none; }
+* { display: block; }
+[data-x] { display: none; }
+#mobile-footer { display: flex; }
+body .step-actions-web { display: none; }`,
+  });
+  const { report } = auditApp(pkg, lib);
+  const got = reasons(report).join("\n");
+  for (const sel of ["button", "\\*", "\\[data-x\\]"]) assert.match(got, new RegExp(`^${sel} :: selector is not anchored`, "m"));
+  assert.doesNotMatch(got, /#mobile-footer ::|body \.step-actions-web ::/, "an id, or an app class under an element, is anchored");
+});
+
+test("app layout: only @media width breakpoints; no imports, layers, fonts, custom properties or !important", () => {
+  const { lib, pkg } = appLayoutPkg({
+    css: `@import "./more.css";
+@layer app { .a { display: none; } }
+@font-face { font-family: X; }
+@media (prefers-color-scheme: dark) { .a { display: none; } }
+@media screen and (width >= 768px) { .a { display: flex; } }
+.a { --color-primary: red; display: block !important; }`,
+  });
+  const { report } = auditApp(pkg, lib);
+  const got = reasons(report).join("\n");
+  assert.match(got, /@import :: @import would load a second stylesheet/);
+  assert.match(got, /@layer :: @layer — a layered app rule loses to the unlayered bundle/);
+  assert.match(got, /@font-face :: @font-face — the app layout stylesheet allows @media width breakpoints only/);
+  assert.match(got, /prefers-color-scheme: dark\) — breakpoints are width conditions only/);
+  assert.doesNotMatch(got, /width >= 768px/, "the range syntax is a width condition");
+  assert.match(got, /--color-primary: red :: defines a custom property/);
+  assert.match(got, /display: block !important :: !important/);
+});
+
+test("app layout: loading it BEFORE the library bundle fails — the unlayered bundle would win every tie", () => {
+  const { lib, pkg } = appLayoutPkg({ handoff: "```css\n@import \"./src/lib/app-layout.css\";\n@import \"@acme/ui/styles.css\";\n```\n" });
+  const { r, report } = auditApp(pkg, lib);
+  assert.equal(r.status, 1);
+  assert.ok(report.issues.some((i) => /loads BEFORE the library bundle/.test(i.reason) && i.file.endsWith("HANDOFF.md")), reasons(report).join("\n"));
+});
+
+test("app layout: order is proven per file — a file loading it without the bundle fails, a Svelte import in order passes", () => {
+  const { lib, pkg } = appLayoutPkg({ handoff: null });
+  writeFileSync(join(pkg, "+layout.svelte"), `<script>\n  import "@acme/ui/styles.css";\n  import "$lib/app-layout.css";\n</script>\n<slot />`);
+  assert.equal(auditApp(pkg, lib).r.status, 0, "library first, in one entry, passes");
+
+  writeFileSync(join(pkg, "+error.svelte"), `<script>import "$lib/app-layout.css";</script>`);
+  const { report } = auditApp(pkg, lib);
+  assert.ok(report.issues.some((i) => /but not the library bundle — load order cannot be proven/.test(i.reason)), reasons(report).join("\n"));
+});
+
+test("app layout: declared and present but never loaded fails; prose is not a load path", () => {
+  const { lib, pkg } = appLayoutPkg({ handoff: "Load @acme/ui/styles.css first, then src/lib/app-layout.css.\n" });
+  const { r, report } = auditApp(pkg, lib);
+  assert.equal(r.status, 1);
+  assert.ok(report.issues.some((i) => /never loaded/.test(i.reason)), reasons(report).join("\n"));
+});
+
+test("app layout: a second stylesheet beside the declared one is still rejected", () => {
+  const { lib, pkg } = appLayoutPkg();
+  writeFileSync(join(pkg, "src", "lib", "extra.css"), `.x { display: none; }`);
+  const { report } = auditApp(pkg, lib);
+  assert.ok(report.issues.some((i) => i.detail === "extra.css" && /the only app CSS allowed is the declared src\/lib\/app-layout\.css/.test(i.reason)), reasons(report).join("\n"));
+});
+
+test("app layout: declared but absent is nothing to audit, and a single-file target ignores it", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="flex">x</div>`);
+  const { r, report } = auditApp(pkg, lib);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(report.rules.appLayout.present, false);
+  assert.match(r.stdout, /declared, not present — nothing to audit/);
+
+  const concept = join(pkg, "concept.v1.html");
+  writeFileSync(concept, `<section data-block="b01" data-class="flex">x</section>`);
+  const c = run(concept, lib, ["--package", PKG, "--app-layout", "src/lib/app-layout.css"]);
+  assert.equal(c.status, 0, "the shared flag must not fail a concept audit: " + c.stdout + c.stderr);
+});
+
+test("app layout: --app-layout without a path is refused", () => {
+  const { lib, pkg } = setup();
+  writeFileSync(join(pkg, "Page.svelte"), `<div class="flex">x</div>`);
+  const r = run(pkg, lib, ["--app-layout"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--app-layout needs a path/);
+});

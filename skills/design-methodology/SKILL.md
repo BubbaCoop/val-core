@@ -436,6 +436,32 @@ writes classes bare, and `--class-prefix` is absent. While a library is
 migrating, the audit accepts both spellings; once its instructions also carry
 `--class-strict`, the unprefixed spelling is rejected.
 
+**The one app layout stylesheet.** By default a page carries no CSS at all. When
+the `class-audit` command in your instructions carries `--app-layout <path>`,
+this library leaves page layout to the app, and exactly ONE stylesheet — that
+path, inside the package — may exist. The audit reads it instead of rejecting
+it, and holds it to five rules:
+
+- **layout properties take any value** — display, visibility, position and its
+  offsets, flex/grid flow and alignment, grid track sizing;
+- **any other property takes its value from library tokens** — at least one
+  `var(--token)` the theme defines, plus lengths and structural keywords
+  (`inset 0 1px 0 var(--color-stroke-divider)` passes; `#ccc`, `red`, `13px`
+  alone do not);
+- **every selector is an app-owned class or id, and never a library class** — the
+  stylesheet arranges the page, it never restyles a component, and a bare
+  `button {}` would reach every library-rendered button;
+- **breakpoints are `@media` width conditions only** — no `@import`, `@layer`,
+  `@font-face`, custom properties or `!important`;
+- **it loads AFTER the library bundle**, wherever it is loaded: the bundle is
+  unlayered, so on a specificity tie the later stylesheet wins, and an app rule
+  loaded first silently does nothing. Name both in HANDOFF.md's load path, in one
+  fenced block, library first.
+
+The classes it defines count as sanctioned in markup. Every other stylesheet,
+`<style>`, `style=` and `style:` is still a violation. Without the flag, none of
+this applies: write no CSS.
+
 A class is **sanctioned** only if it is one of: a selector in
 `src/components/*.css`; an `@utility`; a token utility that derives from a
 `@theme` token **and** is cited in the methodology or CLAUDE.md; a native

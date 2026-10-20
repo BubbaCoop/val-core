@@ -173,9 +173,16 @@ const substitutions = {
     library.package ?? "<the library's npm package — set library.package in val/config.json>",
   LIBRARY_ROOT: libraryRoot,
   // Leading space lives in the value, so an unprefixed library renders a clean command line.
-  CLASS_AUDIT_FLAGS: library.classPrefix
-    ? ` --class-prefix ${library.classPrefix}${library.classSpelling === "strict" ? " --class-strict" : ""}`
-    : "",
+  CLASS_AUDIT_FLAGS:
+    (library.classPrefix
+      ? ` --class-prefix ${library.classPrefix}${library.classSpelling === "strict" ? " --class-strict" : ""}`
+      : "") + (output.appLayoutStylesheet ? ` --app-layout ${output.appLayoutStylesheet}` : ""),
+  // The page builder's CSS rule. One sentence either way, so the template carries no conditional:
+  // unset, every stylesheet is forbidden (the default); set, exactly one is allowed, on terms
+  // class-audit enforces and the builder has to know before it writes the file.
+  APP_LAYOUT_RULE: output.appLayoutStylesheet
+    ? `No \`<style>\`, no \`style=\`, no \`style:\`, no \`@apply\`, and no \`.css\` file **except the one declared app layout stylesheet, \`${output.appLayoutStylesheet}\`**. Put page layout the shipped classes cannot express there and nowhere else: layout properties (display, visibility, position, flex/grid flow and track sizing) take any value; any other property takes its value from library tokens only (\`var(--token)\`, plus lengths and structural keywords); every selector is an app-owned class or id and never a library class; breakpoints are \`@media\` width conditions only — no \`@import\`, \`@layer\`, custom properties or \`!important\`. It must load AFTER the library bundle: name both in HANDOFF.md's load path, in one fenced block, library first. class-audit enforces every clause.`
+    : "No `<style>`, no `style=`, no `style:`, no `.css` file, no `@apply`.",
   FIGMA_FILE_KEY: library.figmaFileKey,
   DESIGN_SYSTEM_SKILL_PATH: paths.designSystemSkill,
   REGISTRY_PATH: paths.componentRegistry,

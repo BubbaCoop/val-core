@@ -89,7 +89,7 @@ Rules that the verifier will check mechanically, so get them right first:
    sets `"verbatimInMarkup": false`.
 5. Every §12 interim class is spelled exactly as the methodology's interim
    column, and listed in `contract.planned` and HANDOFF.md.
-6. No `<style>`, no `style=`, no `style:`, no `.css` file, no `@apply`.
+6. {{APP_LAYOUT_RULE}}
 7. No load path and no sprite loading inside the package — those live at the
    app shell (skill §11). Pages reference `<use href="#icon">` only.
 8. HANDOFF.md's load path names the entry the host uses and cites the
