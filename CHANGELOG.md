@@ -11,6 +11,11 @@ README "Releasing".
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-20
+
+0.11.0 was tagged but never published, so 0.12.0 is the first npm release with its
+features: the re-run path, frame-diff and per-agent models (see 0.11.0 below).
+
 ### Added
 
 - **`design.output.appLayoutStylesheet` — one declared app layout stylesheet.**
