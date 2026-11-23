@@ -39,7 +39,17 @@ one entry per component:
   `figmaNames`, `behaviors`, `tokens`. Enrich the registry by hand
   freely — regeneration keeps it.
 - **Code Connect** (`*.figma.ts`) files, when present, seed `figmaNodeIds`.
-  Without them, name-matching happens at run time.
+  Without them the generator leaves the array empty, and an empty array caps
+  every instance of that component at name-match or visual-guess. A library
+  with no Code Connect files fills them in by hand, from the node its own
+  component reference cites for each component (one id per component set,
+  plus the ids of the part sets the same entry covers — a Menu Item's
+  leading and trailing slots, a Breadcrumbs' item and separator).
+- **`figmaNames` holds the design file's own names** for those sets, exactly
+  as the file spells them (`"Comment / Item"`, `"Nav / Session Row"`,
+  `"Icon Container"`), wherever they differ from the registry key. Read them
+  from the file, never from memory: a guessed alias is merged by union on
+  every regeneration and is never removed for you.
 - **Staleness**: regenerate when the registry is missing or older than the
   newest story file. A mapping run against a stale registry silently
   misses new components; the orchestrator checks this at Gate 0.

@@ -88,7 +88,9 @@ check 01-brief.md has every schema heading and a Source map. On
 
 ### Gate 2 — concept
 Invoke `design-concept-architect` with the run directory (initial pass).
-Check: both viewports present in `02-concept/concept.v1.html`; concept.md
+Check: every viewport the surface lists is present in `02-concept/concept.v1.html`
+(one `<main data-concept>` each — two on a web + mobile surface, one on a
+reviewer surface); concept.md
 has the mapping and copy tables; its class-audit reported PASS (re-run
 `node {{TOOLS_DIR}}/design/class-audit.mjs 02-concept/concept.v1.html
 --library {{LIBRARY_ROOT}} --methodology <methodology> --tailwind-from .

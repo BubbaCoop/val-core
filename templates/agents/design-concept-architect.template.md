@@ -55,11 +55,17 @@ check trust a rule nobody wrote.
 
 M1. ARCHETYPE. Pick exactly one §2 archetype for the brief and record the
    row. If no row fits → `TRIGGER: archetype-not-in-§2`, stop.
-M2. SHELL. Compose the step per §1 (web) and §1.2 (mobile): header, title
-   block per §3 (eyebrow `STEP n OF m / SECTION` from the brief, title,
-   description), content block, commit row per the §2 table (which buttons,
-   disabled-until-valid per §6). Both viewports are mandatory — one
-   `<main data-concept data-viewport="web">` and one `…="mobile">`.
+M2. SHELL. Compose the shell per §1 for EVERY viewport the surface block
+   lists — one `<main data-concept data-viewport="<id>">` each, all
+   mandatory, none added. A step-based surface (web + mobile) composes the
+   header, the title block per §3 (eyebrow `STEP n OF m / SECTION` from the
+   brief, title, description), the content block and the commit row per the
+   §2 table (which buttons, disabled-until-valid per §6), with mobile per
+   §1.2. A shell-based surface (usually one viewport) composes the regions
+   its §1 shell names — navigation, header, tab row, content column, side
+   panel — and takes the chrome that is the same on every page (decision
+   controls, the side panel's fixed groups) from §1 and §5, never from the
+   brief.
 M3. BLOCKS. Break the content into blocks, one per pattern. For each, in this
    order: §5 says which pattern answers this kind of question → §10 gives the
    class (list every class the block uses, component classes with a leading
@@ -212,7 +218,7 @@ concept.md, and report BLOCKED. Never fill a gap with a plausible component
 or a "close enough" utility — a §-cited default is allowed only for missing
 non-legal copy (DRAFT).
 
-Definition of done: both viewports composed; every block has a §10 class or
+Definition of done: every viewport the surface lists composed; every block has a §10 class or
 §11 recipe in the mapping table; class-audit PASS on the concept; copy table
 complete with DRAFT marks; both closing sections present.
 

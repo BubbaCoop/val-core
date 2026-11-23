@@ -5,8 +5,10 @@ description: >
   handoff-ready page using ONLY a component library and a surface methodology
   document — the brief schema, the grey-box concept contract, the five stop
   triggers, the rules-applied report, the Svelte 5 translation rules for a
-  CSS-only library, and the consumer-app conventions. Library-independent;
-  each library's methodology lives at its configured design.methodologyDir.
+  CSS-only library, the consumer-app conventions, and how a surface
+  methodology is written or rewritten when a surface is redesigned.
+  Library-independent; each library's methodology lives at its configured
+  design.methodologyDir.
 ---
 
 # Design methodology
@@ -32,7 +34,7 @@ once per run (they are ~400 lines), then cite it by §:
 
 | § | Role in the pipeline |
 | --- | --- |
-| §0 Conventions | value notation; **the library value is the rule** where a frame and the library disagree |
+| §0 Conventions | value notation; **the library value is the rule** where a frame and the library disagree on a value. May open with the surface's principles and its change process (§13) — read them: every later § is one of them applied |
 | §1 Layout skeleton | the page shell (web + mobile); composition of the column, title block, button row |
 | §2 Archetypes | the closed list of step types and their commit rows — a brief needing anything else is a STOP |
 | §3 Hierarchy | title block, grouping, fold rules |
@@ -42,10 +44,10 @@ once per run (they are ~400 lines), then cite it by §:
 | §7 Navigation | forward/back verbs, position indicator, edit hub |
 | §8 Copy | casing, voice, labels, placeholders, help text |
 | §9 Anti-patterns | what never appears — a brief asking for one is a STOP |
-| §10 Component map | pattern → library class (+ slots, states) |
+| §10 Component map | pattern → library class (+ slots, states), and the design-file node each component comes from |
 | §11 Patterns with no component | utility-only compositions — the only sanctioned non-component markup |
 | §12 Planned additions | components decided but not built; pages use the §11 interim recipe |
-| §13 Open items | unspecified — a brief touching one is a STOP |
+| §13 Open items | unspecified — a brief touching one is a STOP. Includes components drawn in the design file but not yet in the package |
 | Appendix | value ledger (token ↔ utility ↔ role) |
 
 Never read the companion `*-decisions.md` (history, not rules), anything
@@ -80,8 +82,11 @@ Read fresh every run — never from memory. Library-relative paths mean
   the class API; the comment header carries the anatomy and the states that
   exist. A state the CSS does not model does not exist.
 - `src/themes/*.css` — the `@theme` block: every `--color-*`, `--text-*`,
-  `--radius-*`, `--shadow-*` token, and the `@utility type-*` casing
-  utilities. `src/utilities/*.css` — `@utility focus-ring` and siblings.
+  `--radius-*`, `--shadow-*` token, and — where the library has them — the
+  `@utility type-*` casing utilities. `src/utilities/*.css` — `@utility
+  focus-ring` and siblings. A library whose configured casing rule says no
+  text style carries a transform has no casing utility at all: its caps are
+  typed into the string.
 - `GETTING_STARTED.md` — the load path, the framework snippets, and
   "Components That Need JavaScript" (the behaviours a page must implement).
 - The library's design-system skill (the compact class map).
@@ -218,6 +223,29 @@ surface block's region vocabulary so the critic can check the shell part by part
 </main>
 <main data-concept data-viewport="mobile" data-title="Residential details"> … </main>
 </body></html>
+```
+
+A shell-based surface draws the same way, with its own regions and no step
+chrome. A reviewer page with a section and a side panel:
+
+```html
+<main data-concept data-viewport="web" data-title="Application">
+  <section data-block="b01" data-region="header" data-archetype="application-detail"
+           data-class=".vd-breadcrumbs .vd-btn .vd-btn-outline .vd-btn-primary vd:flex vd:h-13 vd:items-center vd:justify-between"
+           data-methodology="§1.2 §5" data-states="rest blocked" data-copy="c01 c02">
+    <p data-label>Header — breadcrumb to the record; Decline, Approve (blocked while findings are open)</p>
+  </section>
+  <section data-block="b02" data-region="section" data-archetype="application-detail"
+           data-class=".vd-summary-preview .vd-record .vd-content-row .vd-severity-count .vd-severity-marker .vd-severity-marker-critical"
+           data-methodology="§2.1 §6.1" data-states="collapsed expanded" data-copy="c03 c04">
+    <p data-label>Business — gutter title; summary line that reads on its own; status column: critical marker + 1</p>
+  </section>
+  <section data-block="b03" data-region="panel-findings" data-archetype="application-detail"
+           data-class=".vd-panel-section-header .vd-finding-row .vd-finding-card .vd-radio-select .vd-finding-option"
+           data-methodology="§2.1" data-states="closed open-choosing open-requesting resolved" data-copy="c05">
+    <p data-label>Findings — one flat list; a finding opens in place; resolutions are radios</p>
+  </section>
+</main>
 ```
 
 Attributes:
@@ -378,8 +406,13 @@ and adapt the props. Concretely:
 9. **No `<style>`, no `style=`, no `style:` directives, no `@apply`, no
    `.css` files in the package.** Layout comes from the methodology's
    utilities, written as it writes them.
-10. **Uppercase is styled, never typed** — the `type-*` utilities carry the
-    transform; markup text is sentence case where the class carries it.
+10. **Casing follows the library's rule, never your own.** Where the library
+    ships `type-*` utilities, uppercase is styled, never typed: the utility
+    carries the transform and markup text is sentence case. Where the
+    library's casing rule says no text style carries a transform (the rule
+    is rendered into your instructions), the reverse holds: caps are typed
+    into the string exactly where the design file types them, and nothing
+    adds `uppercase`.
 11. **Responsive** only with the breakpoint the methodology names (Tailwind's
     native `md:` on the Short App).
 12. **Traceability**: the root element of each concept block carries
@@ -482,10 +515,137 @@ Everything else is **unsanctioned** — including on-grid spacing the
 methodology never uses (`mt-7`) and Tailwind's default palette
 (`bg-red-500`, `text-sm`), which compile in a consumer build because the
 theme does not reset Tailwind's namespaces. Hard violations: colour/size
-literals, `/opacity`, `!important`, `(--var)` shorthand, arbitrary variants,
+literals, `/opacity`, `!important`, `(--var)` shorthand, arbitrary variants and
+arbitrary properties (`[--x:1px]` — set the width or value with a cited utility
+on the element instead),
 `font-*` / `leading-*` / `tracking-*` / `uppercase` / `text-<n>` (type is a
 token), `<style>`, `style=`, `style:`, `@apply`, any external design system.
 
 An unsanctioned class is never "close enough". Either the methodology
 sanctions it (cite the §) or the block needs a different composition — or a
 `no-component` question.
+
+## 13. Writing or rewriting a surface methodology
+
+The pipeline reads a methodology; people write one. When a surface is designed
+for the first time, or redesigned, the methodology is the LAST artefact
+produced, not the first — it records what the design file and the library
+already agree on. This section is for whoever writes it (a person or an agent
+asked to), and it explains to every other agent why a methodology looks the
+way it does.
+
+### 13a. What a design-principles document becomes
+
+A designer's own account of a surface is usually organised by intent —
+principles, process, layout, status language, wording, library rules, page by
+page, what was approved and rejected, mistakes to avoid, open questions. The
+anatomy in §1 is organised by what an agent needs to look up. The ideas stay;
+only their address changes:
+
+| The designer's heading | Lands in | As |
+| --- | --- | --- |
+| Principles | §0 | a numbered list, each pointing at the § that applies it |
+| Process (how a change is made) | §0 | the steps, ending with "take the gaps to the library, then update this file" |
+| Layout system | §1 | one shell per archetype, each with its regions and the utilities that draw them |
+| Page by page | §2 | one archetype entry per page: order, what collapses, what is fixed |
+| "Reduce", "read on its own", "never hide data" | §3 | hierarchy rules |
+| Spacing and row heights | §4 | a table of relationship → utility, with the component's own heights marked as the component's |
+| Library discipline ("check the library first", "reuse the pattern for the job") | §5 | a job → component table with a Never column |
+| Status and feedback language | §6 | a closed marker table: state → marker → class → design-file node; then confirmations, messages, menus, and the state-coverage list |
+| Content and wording; product constraints | §8 | wording rules with the designer's own before/after examples; constraints as stops |
+| Anti-patterns | §9 | the checklist, verbatim |
+| Approved and rejected | §9 | the table, verbatim — the Rejected column is a stop list |
+| Open questions | §13 | open items — each one a stop |
+
+Keep the designer's words wherever they are already a rule ("Never checkboxes
+for a single choice"). Add only what an agent needs to act on the rule: the
+class, the node, the utility.
+
+### 13b. Three names for every component
+
+A rule that names a component names it three ways, so a designer, a developer
+and an agent point at the same thing:
+
+1. **The design-file component** — its name and node id in the library's
+   Figma file (`Content Row`, `168:845`).
+2. **The package class** — what is written in markup (`.vd-content-row`).
+3. **The job on this surface** — "a section's collapsed summary line".
+
+§10 carries all three for every shipped component, in the order of the design
+file's own component page. The same node ids belong in the library's component
+registry (`figmaNodeIds`, with the design file's set names in `figmaNames`
+where they differ from the registry key): that is what turns a `/val` mapping
+from a name guess into an exact match, and without Code Connect files the
+generator does not fill them in — they are hand-maintained and survive
+regeneration.
+
+A component that exists in the design file and not in the package is listed
+too, by name and node, under a heading that says so. It is not composable: a
+block that needs one is a `no-component` stop. Listing it is what keeps an
+agent from rebuilding it by hand.
+
+### 13c. The order of work when a surface is redesigned
+
+A redesign changes many components at once and introduces parts nobody has
+named. The order that worked (Dashboard review surface, 2026-11: 41 → 77
+components across two library releases):
+
+1. **Design settles first, in the design tool** — explored as distinct
+   concepts, prototyped where interaction has to be felt, narrowed by the
+   designer, then drawn into the existing frames with every state beside them
+   (default, hover, open, selected, empty, loading or running, error or
+   failed, confirmation, success message, dark theme) and grouped by ticket.
+2. **The library is swept against the redrawn component page**, tokens before
+   components. Every place the library will differ from the file goes on a
+   list for the designer — a divergence without a list entry is a silent fork.
+3. **One real page is built from the library as a test**, every frame a
+   reachable state, in every theme, using only shipped classes plus the page's
+   own layout.
+4. **Everything the test page had to work around is written down in four
+   lists**: library bugs · places a shipped component differs from the page
+   frames · parts the library does not ship (each a stand-in on the page) ·
+   differences that are the page's own.
+5. **The first three lists are closed in the library, never on the page.** A
+   stand-in that survives on a page is a component nobody else can use; a
+   workaround that survives is a bug every other page will hit.
+6. **The test page is rebuilt with no workarounds and no stand-ins.** Its own
+   CSS should be layout only.
+7. **The methodology is rewritten from the result** — and only now. Shell
+   compositions (§11) are transcribed from the page's layout into the library's
+   utility spelling; §10 is regenerated against the library; decisions the
+   library cannot express yet become §12 rows with an interim class, and
+   undecided ones become §13 stops.
+
+Writing the methodology before step 3 produces rules the library cannot
+satisfy. Extracting components without step 3 produces components that do not
+line up with each other: a shared column grid is a property of a page, and no
+single component set shows it.
+
+### 13d. Rules for the rewrite itself
+
+- **Keep the anatomy.** §0–§13 and the appendix keep their numbers and roles.
+  `class-audit` reads the §10 "shipped but unused" line and the §12 interim
+  column by position; agents cite by §.
+- **Superseded is not rejected.** A rule the redesign replaced goes in a
+  "superseded" table (old → new) so a page built on the old shell is
+  recognised and not copied. The designer's approved / rejected table is kept
+  verbatim and is not padded with inferences.
+- **A shell that was not redrawn is carried over and labelled**, with its
+  original evidence. Do not restyle it by analogy with the redesigned one.
+- **A methodology can be a build input.** Where a library ships a closed
+  utility set generated from the methodology, deleting a citation deletes the
+  utility from the next bundle and breaks pages already built on it. Diff the
+  cited set before and after; keep what dropped in a labelled "retained"
+  appendix until a release removes it on purpose.
+- **Every composition is checked by the audit before it is written down.** Put
+  the §11 recipe's classes in a throwaway concept and run `class-audit` with
+  the surface's flags. A recipe the audit rejects (an arbitrary property, an
+  uncited utility) is not a recipe.
+- **Re-read the surface block.** A redesign changes the region vocabulary, the
+  brief schema, the stop triggers and the concept sections in
+  `design.surfaces.<id>`; a methodology and a surface block that disagree
+  produce briefs for a page that no longer exists.
+- **State what is not known.** A page whose pattern is approved but whose
+  values were never extracted says so, per rule ("high (pattern) / not
+  extracted (values)"). An agent may compose the pattern's shell from such a
+  rule and must stop at the first value it would have to invent.

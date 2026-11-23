@@ -11,6 +11,38 @@ README "Releasing".
 
 ## [Unreleased]
 
+### Changed
+
+- **The design templates no longer assume a web + mobile step surface.**
+  `design-concept-architect` step M2 said "Both viewports are mandatory — one
+  `web` and one `mobile`", its definition of done said "both viewports
+  composed", and `/design` Gate 2 checked "both viewports present". A
+  shell-based reviewer surface declares one viewport (the Applicant Portal
+  already did; the Dashboard does as of this change), so the instruction
+  contradicted the surface block rendered into the same agent. All three now
+  read "every viewport the surface lists", and M2 describes both kinds of
+  shell. No tool or contract changed.
+- **`design-methodology` skill.** New §13, "Writing or rewriting a surface
+  methodology": how a designer's principles document maps onto the §0–§13
+  anatomy, the three names every component carries (design-file node, package
+  class, job on the surface), the order of work when a surface is redesigned
+  (design settles → library sweep → a test page → four gap lists closed in the
+  library → the methodology last), and the rules for the rewrite itself —
+  including that a methodology can be a build input (a closed utility set
+  generated from it), so its cited set is diffed before and after. Also: a
+  shell-based concept example in §7; §10 rule 10 and §2 now follow the
+  library's casing rule instead of assuming `type-*` utilities exist; §12
+  names arbitrary properties (`[--x:1px]`) among the hard violations
+  `class-audit` already rejects; §1's table says §0 may carry a surface's
+  principles and that §10 carries design-file nodes.
+- **`component-mapping` skill** — says where `figmaNodeIds` come from when a
+  library has no Code Connect files (the library's component reference, by
+  hand; they survive regeneration) and that `figmaNames` holds the design
+  file's own set names.
+- **README** — documents `/design`, the two kinds of surface, the
+  `design.surfaces` and `design.output` config keys, Val Studio's relationship
+  to the pipeline, and the `design-methodology` skill.
+
 ## [0.12.0] — 2026-10-20
 
 0.11.0 was tagged but never published, so 0.12.0 is the first npm release with its

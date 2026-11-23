@@ -1,9 +1,10 @@
 # @valiify/val-core
 
 Val is the agent pipeline the Valiify component libraries use to turn Figma
-into verified code. This package is the **shared** part: the agent
-templates, the orchestrator commands, the measurement tools, and the
-methodology skills. Each library keeps only what is genuinely its own — a
+into verified code — and, with `/design`, to turn a business brief into a
+page composed only from a library and its design methodology. This package
+is the **shared** part: the agent templates, the orchestrator commands, the
+measurement tools, and the methodology skills. Each library keeps only what is genuinely its own — a
 `val/config.json` and its design-system skill — and generates its agents
 from here.
 
@@ -16,7 +17,8 @@ from here.
   │         generate-registry            │    │ val/tools  → symlink into core   │
   │ skills/ extract-methodology ·        │    │ .claude/skills/<library>-ui/     │
   │         visual-verification ·        │    │ val/registry/components.json     │
-  │         component-mapping            │    │ val/runs/                        │
+  │         component-mapping ·          │    │ val/runs/                        │
+  │         design-methodology           │    │ design-methodology/<surface>.md  │
   └──────────────────────────────────────┘    └──────────────────────────────────┘
                      npx val-init
 ```
@@ -43,6 +45,40 @@ parallel lanes (`extract-structure`, `extract-tokens`, `extract-visual`)
 read the same component set independently; `extract-synthesis` cross-checks
 them into an implementation spec. The main session then implements per the
 library's component process.
+
+**`/design <brief> [--surface <id>]`** then **`/design build <run-dir>`** —
+page design without a frame. A business brief becomes a grey-box concept, a
+reviewer approves it, and the approved concept becomes a SvelteKit handoff
+package. Nothing is drawn from Figma, an image or memory: a page is composed
+from the library's classes and the surface's methodology document, and where
+those two do not determine something the agent stops and asks.
+
+1. `design-brief-intake` — the brief into the surface's schema; every row
+   sourced to a quoted sentence; gaps become BLOCKING questions
+2. `design-concept-architect` ⇄ `design-critic` — the concept
+   (`concept.v<n>.html` + `concept.md`), critiqued against the methodology,
+   at most three passes; `class-audit` on every version
+3. **human gate** — the reviewer approves, or sends changes back as
+   `feedback-<n>.md` (uncapped rounds, each re-critiqued); approval is sealed
+   with a sha256 of the concept
+4. `design-page-builder` ⇄ `design-handoff-verifier` — the package:
+   route, components, `contract.json`, `mapping.md`, `HANDOFF.md`
+
+A library opts in with `pipelines.design` and one or more
+`design.surfaces.<id>` — a methodology file plus the surface's viewports,
+region vocabulary, brief schema, stop triggers and concept sections. Two
+kinds of surface exist today: step-based applicant surfaces (the Short App:
+web + mobile, a title block and a commit row per step) and shell-based
+reviewer surfaces (the Applicant Portal; the Dashboard: one viewport, a
+fixed shell, sections and a side panel).
+
+**Val Studio** (`@valiify/studio`, a separate private repo) is a local web
+client for `/design`: pick a surface, write the brief, review the concept,
+give per-block feedback, approve. It reads `design.surfaces` from the target
+library's `val/config.json` and the run directory on disk, writes only briefs,
+feedback rounds and answers, and decides nothing the pipeline decides — so
+anything a surface needs must be in the config and the methodology, not in
+Studio.
 
 ## Install in a library
 
@@ -84,8 +120,10 @@ worked example: [val.config.example.json](val.config.example.json).
 | `sizing.heightRule` | how a Figma control's frame height maps to CSS — a library with height tokens states the token mapping here (e.g. the Short App's 32/40/48/56 → `var(--height-*)`); the default pins the authored frame height |
 | `audience` | the register sentence in requirements §1 |
 | `models` | optional per-agent model override written into the generated frontmatter, e.g. `{ "val-context": "sonnet", "val-qa": "sonnet" }` to move mechanical stages off the most expensive model; unknown agent names fail, and the `design-*` agents (which pin `inherit`) cannot be overridden |
+| `design.methodologyDir` / `design.surfaces.<id>` | the surface methodology files and, per surface, what differs between surfaces without being a design rule: `viewports` (one `<main data-concept>` each), `regions` (the `data-region` vocabulary), `briefSchema` (the 01-brief.md headings; required ones are stops), `stopTriggers` (the surface's own, beside the five generic ones) and `conceptSections`. Rendered into every `design-*` agent and read by Val Studio. When a surface is redesigned, this block changes with its methodology |
+| `design.output.framework` / `svelteMajor` / `pagesDir` / `componentsDir` | the handoff target the page builder writes for |
 | `design.output.appLayoutStylesheet` | optional — the ONE app-owned layout stylesheet a design package may carry (e.g. `src/lib/app-layout.css`); class-audit audits it instead of rejecting it — layout properties freely, other properties from tokens only, app-class selectors only, `@media` width breakpoints only, loaded after the library bundle — and the page builder is told it may write it. Unset, all page CSS stays forbidden |
-| `pipelines.val` / `pipelines.extract` | generate one pipeline or both |
+| `pipelines.val` / `pipelines.extract` / `pipelines.design` | generate any combination; `design` requires at least one `design.surfaces` entry |
 
 Two libraries, two configs, identical methodology:
 
@@ -190,6 +228,14 @@ path (`node_modules/@valiify/val-core/skills/…`):
   measurement, grid-diff classes, artifact-vs-defect classification
 - **component-mapping** — registry schema, confidence ladder, aliases,
   deviations, merge contract
+- **design-methodology** — how `/design` works: the anatomy every surface
+  methodology shares (§0–§13), the five stop triggers, the grey-box concept
+  contract, the critique and feedback format, the package contract, the
+  HTML → Svelte 5 rules, class discipline — and how a methodology is written
+  or rewritten when a surface is redesigned (the design-file ↔ package ↔ job
+  naming of every component, and the order of work: design settles, library
+  sweep, a test page, four gap lists closed in the library, then the
+  methodology)
 
 ## Roadmap
 
